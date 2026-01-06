@@ -273,8 +273,7 @@ export const dataService = {
     };
 
     if (supabase) {
-      // Prepare the payload: DO NOT include "id", let Supabase/the DB generate the UUID.
-      // For optional UUIDs: assigned_mechanic_id is null, do not send arbitrary values.
+      // Prepare the payload for Supabase inserts — always set status 'open' per enum constraint, do not send "id", and only send null/valid UUID for optional UUIDs.
       const insertPayload = {
         created_at: nowIso,
         user_id: user.id,
@@ -282,7 +281,7 @@ export const dataService = {
         vehicle,
         issue_description: issueDescription,
         contact,
-        status: "Submitted",
+        status: "open", // always set 'open' at creation
         assigned_mechanic_id: null,
         assigned_mechanic_email: null,
         notes: [],
