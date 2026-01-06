@@ -46,10 +46,11 @@ function ensureSeedData() {
       vehicle: { make: "Toyota", model: "Corolla", year: "2016", plate: "ABC-123" },
       issueDescription: "Car won't start, clicking noise.",
       contact: { name: "Sam Driver", phone: "555-0101" },
-      status: "Submitted",
+      notes: [],
+      status: "open",
       assignedMechanicId: null,
       assignedMechanicEmail: null,
-      notes: [],
+      priority: "normal"
     },
     {
       id: uid("req"),
@@ -59,10 +60,11 @@ function ensureSeedData() {
       vehicle: { make: "Honda", model: "Civic", year: "2018", plate: "XYZ-987" },
       issueDescription: "Flat tire on rear left.",
       contact: { name: "Sam Driver", phone: "555-0101" },
-      status: "In Review",
+      notes: [],
+      status: "open",
       assignedMechanicId: null,
       assignedMechanicEmail: null,
-      notes: [],
+      priority: "normal"
     },
   ];
 
@@ -75,48 +77,37 @@ function ensureSeedData() {
 function getLocalSession() {
   return readJson(LS_KEYS.session, null);
 }
-
 function setLocalSession(session) {
   writeJson(LS_KEYS.session, session);
 }
-
 function clearLocalSession() {
   window.localStorage.removeItem(LS_KEYS.session);
 }
-
 function getLocalUsers() {
   return readJson(LS_KEYS.users, []);
 }
-
 function setLocalUsers(users) {
   writeJson(LS_KEYS.users, users);
 }
-
 function getLocalRequests() {
   return readJson(LS_KEYS.requests, []);
 }
-
 function setLocalRequests(reqs) {
   writeJson(LS_KEYS.requests, reqs);
 }
-
 function getSupabaseEnv() {
   const url = process.env.REACT_APP_SUPABASE_URL;
   const key = process.env.REACT_APP_SUPABASE_KEY;
   return { url, key };
 }
-
 // PUBLIC_INTERFACE
 function isSupabaseConfigured() {
-  /** Returns true only when required REACT_APP_ Supabase env vars are present (React build-time). */
   const { url, key } = getSupabaseEnv();
   return Boolean(url && key);
 }
-
 function getSupabase() {
   const { url, key } = getSupabaseEnv();
   if (!url || !key) return null;
-
   try {
     return createClient(url, key);
   } catch {
@@ -125,8 +116,6 @@ function getSupabase() {
 }
 
 async function supaGetUserRole(supabase, userId, email) {
-  // Minimal role table assumption: public.profiles(id uuid primary key, email text, role text, approved boolean)
-  // If not present, default to "user".
   try {
     const { data, error } = await supabase.from("profiles").select("role,approved").eq("id", userId).maybeSingle();
     if (error) return { role: "user", approved: true };
@@ -140,44 +129,76 @@ async function supaGetUserRole(supabase, userId, email) {
   }
 }
 
+// ---- Serialization helpers ----
+function canonicalizeVehicle(vehicle, fallback) {
+  // Returns {make, model, year, plate}
+  if (!vehicle || typeof vehicle !== "object") return fallback || { make: "", model: "", year: "", plate: "" };
+  return {
+    make: vehicle.make || "",
+    model: vehicle.model || "",
+    year: vehicle.year || "",
+    plate: vehicle.plate || "",
+  };
+}
+function canonicalizeContact(contact, fallback) {
+  if (!contact || typeof contact !== "object") return fallback || { name: "", phone: "", email: "" };
+  return {
+    name: contact.name || "",
+    phone: contact.phone || "",
+    email: contact.email || "",
+  };
+}
+function deriveVehicleString(vehicle) {
+  // "${make} ${model}" with null-safe guards
+  if (!vehicle) return "";
+  return [vehicle.make, vehicle.model].filter(Boolean).join(" ");
+}
+function deriveVehicleFull(vehicle) {
+  // "${year} ${make} ${model}" with null-safe guards
+  if (!vehicle) return "";
+  return [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
+}
+
+function parseLegacyVehicleStr(vehicleStr) {
+  // Try split on spaces, best effort for legacy fallback
+  if (typeof vehicleStr !== "string") return { make: "", model: "", year: "", plate: "" };
+  const parts = vehicleStr.split(" ");
+  return {
+    year: parts.length === 3 ? parts[0] : "",
+    make: parts.length >= 2 ? parts[parts.length - 2] : "",
+    model: parts.length >= 1 ? parts[parts.length - 1] : "",
+    plate: "",
+  };
+}
+
+function parseLegacyContactStr(contactStr) {
+  // e.g., "Sam Driver (555-0101)"
+  if (typeof contactStr !== "string") return { name: "", phone: "", email: "" };
+  const match = contactStr.match(/^(.*?) *\((.*?)\)/);
+  if (match) { return { name: match[1].trim(), phone: match[2].trim(), email: "" }; }
+  return { name: contactStr.trim(), phone: "", email: "" };
+}
+
 /*
-  FIELD MAPPING NOTES (MUST BE IDENTICAL ACROSS ALL 3 FRONTENDS/SERVICES)
-
-  UI form fields (local): {vehicle: {make, model, year, plate}, contact: {name, phone}, issueDescription}
-  Supabase DB columns (requests): 
-    - vehicle (jsonb: {make, model, year, plate}), 
-    - contact (jsonb: {name, phone}),
-    - user_email, 
-    - assigned_mechanic_email, 
-    - notes (jsonb array), 
-    - status (text), 
-    - id (db-generated UUID or provided string for local),
-    - created_at (timestamp), 
-    - user_id (uuid), 
-    - assigned_mechanic_id (uuid, nullable).
-  
-  - When reading, always reconstruct {vehicle} and {contact} if only primitives are present or if data is stringified.
-  - When writing, always persist {vehicle} and {contact} as jsonb to Supabase.
-  - If future backends provide only separate fields, include non-breaking fallback to recompose.
-  - "vehicle" UI display: "${vehicle.make} ${vehicle.model} ${vehicle.year}" (never expect a single vehiclestring column unless legacy).
-  - "contact" UI display: "${contact.name} (${contact.phone})"
-  - Omit "id" on insert in Supabase mode; let Supabase assign. Always set status="open" on submit, leave assignments/mechanic UUIDs null unless set.
-
-  These rules ensure consistent field display/persistence across User Website, Mechanic Portal, and Admin Panel.
-
+ CANONICAL KEYS: 
+ - make, model, year, plate (vehicle), 
+ - contact_name, contact_phone, contact_email,
+ - notes, user_email, assigned_mechanic_email,
+ - priority, status, id, created_at, user_id, assigned_mechanic_id
+ - status: always 'open' on insert
+ - priority: defaults to 'normal'
+ - id: omitted on Supabase insert (let it generate uuid)
+ - On read: gracefully fallback if old record fields.
 */
+
 // PUBLIC_INTERFACE
 export const dataService = {
-  /** Data access facade: uses Supabase when configured; otherwise localStorage mock. */
-
-  // PUBLIC_INTERFACE
   async register(email, password) {
     ensureSeedData();
     const supabase = getSupabase();
     if (supabase) {
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw new Error(error.message);
-      // When email confirmation is enabled, user might be null; still return.
       const user = data.user;
       if (user) {
         const roleInfo = await supaGetUserRole(supabase, user.id, email);
@@ -185,7 +206,6 @@ export const dataService = {
       }
       return { id: "pending", email, role: "user", approved: true };
     }
-
     const users = getLocalUsers();
     if (users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
       throw new Error("Email already registered.");
@@ -196,7 +216,6 @@ export const dataService = {
     return { id: user.id, email: user.email, role: user.role, approved: user.approved };
   },
 
-  // PUBLIC_INTERFACE
   async login(email, password) {
     ensureSeedData();
     const supabase = getSupabase();
@@ -207,7 +226,6 @@ export const dataService = {
       const roleInfo = await supaGetUserRole(supabase, user.id, user.email);
       return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
     }
-
     const users = getLocalUsers();
     const match = users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     if (!match) throw new Error("Invalid email or password.");
@@ -215,7 +233,6 @@ export const dataService = {
     return { id: match.id, email: match.email, role: match.role, approved: match.approved };
   },
 
-  // PUBLIC_INTERFACE
   async logout() {
     const supabase = getSupabase();
     if (supabase) {
@@ -225,7 +242,6 @@ export const dataService = {
     clearLocalSession();
   },
 
-  // PUBLIC_INTERFACE
   async getCurrentUser() {
     ensureSeedData();
     const supabase = getSupabase();
@@ -236,7 +252,6 @@ export const dataService = {
       const roleInfo = await supaGetUserRole(supabase, user.id, user.email);
       return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
     }
-
     const session = getLocalSession();
     if (!session?.userId) return null;
     const users = getLocalUsers();
@@ -245,7 +260,6 @@ export const dataService = {
     return { id: u.id, email: u.email, role: u.role, approved: u.approved, profile: u.profile };
   },
 
-  // PUBLIC_INTERFACE
   async listRequests({ forUserId } = {}) {
     ensureSeedData();
     const supabase = getSupabase();
@@ -254,106 +268,108 @@ export const dataService = {
       const res = forUserId ? await q.eq("user_id", forUserId) : await q;
       if (res.error) throw new Error(res.error.message);
       return (res.data || []).map((r) => {
-        // Defensive handling for "vehicle" and "contact": prefer jsonb, if missing, reconstruct from primitives/legacy
-        let vehicle = r.vehicle;
-        if (!vehicle || typeof vehicle !== "object") {
-          vehicle = {};
-          if (r.vehicle_make) vehicle.make = r.vehicle_make;
-          if (r.vehicle_model) vehicle.model = r.vehicle_model;
-          if (r.vehicle_year) vehicle.year = r.vehicle_year;
-          if (r.vehicle_plate) vehicle.plate = r.vehicle_plate;
-          // Fallback if a string is present
-          if (!vehicle.make && typeof r.vehicle === "string") {
-            // Try to parse if vehicle field is "make model year" format
-            const parts = r.vehicle.split(" ");
-            vehicle.make = parts[0] || "";
-            vehicle.model = parts[1] || "";
-            vehicle.year = parts[2] || "";
-          }
+        // Vehicle/Contact mapping: prefer canonical JSON, else fallback to legacy/separate fields
+        let vehicle = canonicalizeVehicle(r.vehicle);
+        // old: individual fields
+        if ((!vehicle.make || !vehicle.model) && (r.vehicle_make || r.vehicle_model)) {
+          vehicle.make = r.vehicle_make || "";
+          vehicle.model = r.vehicle_model || "";
+          vehicle.year = r.vehicle_year || "";
+          vehicle.plate = r.vehicle_plate || "";
         }
-        let contact = r.contact;
-        if (!contact || typeof contact !== "object") {
-          contact = {};
-          if (r.contact_name) contact.name = r.contact_name;
-          if (r.contact_phone) contact.phone = r.contact_phone;
-          // Fallback for combined contact (if stored)
-          if (!contact.name && typeof r.contact === "string") contact.name = r.contact;
+        // fallback to string
+        if (!vehicle.make && typeof r.vehicle === "string") {
+          Object.assign(vehicle, parseLegacyVehicleStr(r.vehicle));
         }
+
+        let contact = canonicalizeContact(r.contact);
+        if ((!contact.name || !contact.phone) && (r.contact_name || r.contact_phone)) {
+          contact.name = r.contact_name || "";
+          contact.phone = r.contact_phone || "";
+          contact.email = r.contact_email || "";
+        }
+        if (!contact.name && typeof r.contact === "string") {
+          Object.assign(contact, parseLegacyContactStr(r.contact));
+        }
+
+        // Canonical keys
         return {
           id: r.id,
-          createdAt: r.created_at,
+          createdAt: r.created_at || r.createdAt,
           userId: r.user_id,
           userEmail: r.user_email,
           vehicle,
-          issueDescription: r.issue_description,
+          vehicleStr: deriveVehicleString(vehicle),
+          vehicleFull: deriveVehicleFull(vehicle),
+          issueDescription: r.issue_description || r.issueDescription || "",
           contact,
-          status: r.status,
-          assignedMechanicId: r.assigned_mechanic_id,
-          assignedMechanicEmail: r.assigned_mechanic_email,
+          contactName: contact.name,
+          contactPhone: contact.phone,
+          contactEmail: contact.email || r.contact_email || "",
           notes: r.notes || [],
+          status: r.status || "open",
+          assignedMechanicId: r.assigned_mechanic_id || null,
+          assignedMechanicEmail: r.assigned_mechanic_email || null,
+          priority: r.priority || "normal",
         };
       });
     }
-
-    const all = getLocalRequests();
-    return (forUserId ? all.filter((r) => r.userId === forUserId) : all).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    // Local/mock mode
+    const all = getLocalRequests().map((r) => {
+      const vehicle = canonicalizeVehicle(r.vehicle);
+      const contact = canonicalizeContact(r.contact);
+      return {
+        ...r,
+        vehicle,
+        vehicleStr: deriveVehicleString(vehicle),
+        vehicleFull: deriveVehicleFull(vehicle),
+        contact,
+        contactName: contact.name,
+        contactPhone: contact.phone,
+        contactEmail: contact.email || "",
+        priority: r.priority || "normal",
+        status: r.status || "open",
+        notes: r.notes || [],
+        assignedMechanicId: r.assignedMechanicId || null,
+        assignedMechanicEmail: r.assignedMechanicEmail || null,
+      };
+    });
+    return (forUserId ? all.filter((r) => r.userId === forUserId) : all).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   },
 
-  // PUBLIC_INTERFACE
   async getRequestById(requestId) {
     const list = await this.listRequests();
     return list.find((r) => r.id === requestId) || null;
   },
 
-  // PUBLIC_INTERFACE
-  async createRequest({ user, vehicle, issueDescription, contact }) {
+  async createRequest({ user, vehicle, issueDescription, contact, notes, priority }) {
     ensureSeedData();
     const supabase = getSupabase();
     const nowIso = new Date().toISOString();
 
-    // Defensive: map/compose vehicle and contact to match DB columns (always as JSON, even if UI fields are strings/primitives)
-    // Fallback for field shape mismatches
-    const safeVehicle = {
-      make: vehicle?.make || "",
-      model: vehicle?.model || "",
-      year: vehicle?.year || "",
-      plate: vehicle?.plate || "",
-    };
-    const safeContact = {
-      name: contact?.name || "",
-      phone: contact?.phone || "",
-    };
+    // Canonicalize vehicle/contact
+    const safeVehicle = canonicalizeVehicle(vehicle);
+    const safeContact = canonicalizeContact(contact);
 
-    // Prep mock request for localStorage mode
-    const request = {
-      id: uid("req"),
-      createdAt: nowIso,
-      userId: user.id,
-      userEmail: user.email,
-      vehicle: safeVehicle,
-      issueDescription,
-      contact: safeContact,
-      status: "Submitted",
-      assignedMechanicId: null,
-      assignedMechanicEmail: null,
-      notes: [],
-    };
+    priority = priority || "normal";
 
     if (supabase) {
-      // Prepare the payload for Supabase inserts — always set status 'open' per enum constraint, do not send "id", and only send null/valid UUID for optional UUIDs.
+      // Only send canonical keys
       const insertPayload = {
+        // No "id", Supabase generates UUID
         created_at: nowIso,
         user_id: user.id,
         user_email: user.email,
         vehicle: safeVehicle,
         issue_description: issueDescription,
         contact: safeContact,
-        status: "open", // always set 'open' at creation
+        notes: Array.isArray(notes) ? notes : [],
+        status: "open", // always "open" on create
         assigned_mechanic_id: null,
         assigned_mechanic_email: null,
-        notes: [],
+        priority,
       };
-      // Use .select() to get the inserted row including the UUID generated by Supabase
+      // Use .select() to get inserted row including Supabase UUID
       const { data, error } = await supabase
         .from("requests")
         .insert(insertPayload)
@@ -363,21 +379,8 @@ export const dataService = {
       if (error) throw new Error(error.message);
       if (!data) throw new Error("Failed to insert request.");
 
-      // Adapt result to client shape using same key mapping as .listRequests
-      let vehicleObj = data.vehicle;
-      if (!vehicleObj || typeof vehicleObj !== "object") {
-        vehicleObj = {};
-        if (data.vehicle_make) vehicleObj.make = data.vehicle_make;
-        if (data.vehicle_model) vehicleObj.model = data.vehicle_model;
-        if (data.vehicle_year) vehicleObj.year = data.vehicle_year;
-        if (data.vehicle_plate) vehicleObj.plate = data.vehicle_plate;
-      }
-      let contactObj = data.contact;
-      if (!contactObj || typeof contactObj !== "object") {
-        contactObj = {};
-        if (data.contact_name) contactObj.name = data.contact_name;
-        if (data.contact_phone) contactObj.phone = data.contact_phone;
-      }
+      let vehicleObj = canonicalizeVehicle(data.vehicle, {});
+      let contactObj = canonicalizeContact(data.contact, {});
 
       return {
         id: data.id,
@@ -385,21 +388,45 @@ export const dataService = {
         userId: data.user_id,
         userEmail: data.user_email,
         vehicle: vehicleObj,
+        vehicleStr: deriveVehicleString(vehicleObj),
+        vehicleFull: deriveVehicleFull(vehicleObj),
         issueDescription: data.issue_description,
         contact: contactObj,
-        status: data.status,
-        assignedMechanicId: data.assigned_mechanic_id,
-        assignedMechanicEmail: data.assigned_mechanic_email,
+        contactName: contactObj.name,
+        contactPhone: contactObj.phone,
+        contactEmail: contactObj.email,
         notes: data.notes || [],
+        status: data.status || "open",
+        assignedMechanicId: data.assigned_mechanic_id || null,
+        assignedMechanicEmail: data.assigned_mechanic_email || null,
+        priority: data.priority || "normal",
       };
     }
 
-    // In mock mode, assign a custom string ID.
+    // Local/mock mode - behave identically except for ID and createdAt key
+    const request = {
+      id: uid("req"),
+      createdAt: nowIso,
+      userId: user.id,
+      userEmail: user.email,
+      vehicle: safeVehicle,
+      vehicleStr: deriveVehicleString(safeVehicle),
+      vehicleFull: deriveVehicleFull(safeVehicle),
+      issueDescription,
+      contact: safeContact,
+      contactName: safeContact.name,
+      contactPhone: safeContact.phone,
+      contactEmail: safeContact.email,
+      notes: Array.isArray(notes) ? notes : [],
+      status: "open",
+      assignedMechanicId: null,
+      assignedMechanicEmail: null,
+      priority,
+    };
     const all = getLocalRequests();
     setLocalRequests([request, ...all]);
     return request;
   },
 
-  // PUBLIC_INTERFACE
   isSupabaseConfigured,
 };
