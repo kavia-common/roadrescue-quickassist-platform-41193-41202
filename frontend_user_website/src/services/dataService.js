@@ -140,6 +140,32 @@ async function supaGetUserRole(supabase, userId, email) {
   }
 }
 
+/*
+  FIELD MAPPING NOTES (MUST BE IDENTICAL ACROSS ALL 3 FRONTENDS/SERVICES)
+
+  UI form fields (local): {vehicle: {make, model, year, plate}, contact: {name, phone}, issueDescription}
+  Supabase DB columns (requests): 
+    - vehicle (jsonb: {make, model, year, plate}), 
+    - contact (jsonb: {name, phone}),
+    - user_email, 
+    - assigned_mechanic_email, 
+    - notes (jsonb array), 
+    - status (text), 
+    - id (db-generated UUID or provided string for local),
+    - created_at (timestamp), 
+    - user_id (uuid), 
+    - assigned_mechanic_id (uuid, nullable).
+  
+  - When reading, always reconstruct {vehicle} and {contact} if only primitives are present or if data is stringified.
+  - When writing, always persist {vehicle} and {contact} as jsonb to Supabase.
+  - If future backends provide only separate fields, include non-breaking fallback to recompose.
+  - "vehicle" UI display: "${vehicle.make} ${vehicle.model} ${vehicle.year}" (never expect a single vehiclestring column unless legacy).
+  - "contact" UI display: "${contact.name} (${contact.phone})"
+  - Omit "id" on insert in Supabase mode; let Supabase assign. Always set status="open" on submit, leave assignments/mechanic UUIDs null unless set.
+
+  These rules ensure consistent field display/persistence across User Website, Mechanic Portal, and Admin Panel.
+
+*/
 // PUBLIC_INTERFACE
 export const dataService = {
   /** Data access facade: uses Supabase when configured; otherwise localStorage mock. */
@@ -227,19 +253,46 @@ export const dataService = {
       const q = supabase.from("requests").select("*").order("created_at", { ascending: false });
       const res = forUserId ? await q.eq("user_id", forUserId) : await q;
       if (res.error) throw new Error(res.error.message);
-      return (res.data || []).map((r) => ({
-        id: r.id,
-        createdAt: r.created_at,
-        userId: r.user_id,
-        userEmail: r.user_email,
-        vehicle: r.vehicle,
-        issueDescription: r.issue_description,
-        contact: r.contact,
-        status: r.status,
-        assignedMechanicId: r.assigned_mechanic_id,
-        assignedMechanicEmail: r.assigned_mechanic_email,
-        notes: r.notes || [],
-      }));
+      return (res.data || []).map((r) => {
+        // Defensive handling for "vehicle" and "contact": prefer jsonb, if missing, reconstruct from primitives/legacy
+        let vehicle = r.vehicle;
+        if (!vehicle || typeof vehicle !== "object") {
+          vehicle = {};
+          if (r.vehicle_make) vehicle.make = r.vehicle_make;
+          if (r.vehicle_model) vehicle.model = r.vehicle_model;
+          if (r.vehicle_year) vehicle.year = r.vehicle_year;
+          if (r.vehicle_plate) vehicle.plate = r.vehicle_plate;
+          // Fallback if a string is present
+          if (!vehicle.make && typeof r.vehicle === "string") {
+            // Try to parse if vehicle field is "make model year" format
+            const parts = r.vehicle.split(" ");
+            vehicle.make = parts[0] || "";
+            vehicle.model = parts[1] || "";
+            vehicle.year = parts[2] || "";
+          }
+        }
+        let contact = r.contact;
+        if (!contact || typeof contact !== "object") {
+          contact = {};
+          if (r.contact_name) contact.name = r.contact_name;
+          if (r.contact_phone) contact.phone = r.contact_phone;
+          // Fallback for combined contact (if stored)
+          if (!contact.name && typeof r.contact === "string") contact.name = r.contact;
+        }
+        return {
+          id: r.id,
+          createdAt: r.created_at,
+          userId: r.user_id,
+          userEmail: r.user_email,
+          vehicle,
+          issueDescription: r.issue_description,
+          contact,
+          status: r.status,
+          assignedMechanicId: r.assigned_mechanic_id,
+          assignedMechanicEmail: r.assigned_mechanic_email,
+          notes: r.notes || [],
+        };
+      });
     }
 
     const all = getLocalRequests();
@@ -257,15 +310,29 @@ export const dataService = {
     ensureSeedData();
     const supabase = getSupabase();
     const nowIso = new Date().toISOString();
+
+    // Defensive: map/compose vehicle and contact to match DB columns (always as JSON, even if UI fields are strings/primitives)
+    // Fallback for field shape mismatches
+    const safeVehicle = {
+      make: vehicle?.make || "",
+      model: vehicle?.model || "",
+      year: vehicle?.year || "",
+      plate: vehicle?.plate || "",
+    };
+    const safeContact = {
+      name: contact?.name || "",
+      phone: contact?.phone || "",
+    };
+
     // Prep mock request for localStorage mode
     const request = {
       id: uid("req"),
       createdAt: nowIso,
       userId: user.id,
       userEmail: user.email,
-      vehicle,
+      vehicle: safeVehicle,
       issueDescription,
-      contact,
+      contact: safeContact,
       status: "Submitted",
       assignedMechanicId: null,
       assignedMechanicEmail: null,
@@ -278,9 +345,9 @@ export const dataService = {
         created_at: nowIso,
         user_id: user.id,
         user_email: user.email,
-        vehicle,
+        vehicle: safeVehicle,
         issue_description: issueDescription,
-        contact,
+        contact: safeContact,
         status: "open", // always set 'open' at creation
         assigned_mechanic_id: null,
         assigned_mechanic_email: null,
@@ -296,15 +363,30 @@ export const dataService = {
       if (error) throw new Error(error.message);
       if (!data) throw new Error("Failed to insert request.");
 
-      // Adapt result to client shape
+      // Adapt result to client shape using same key mapping as .listRequests
+      let vehicleObj = data.vehicle;
+      if (!vehicleObj || typeof vehicleObj !== "object") {
+        vehicleObj = {};
+        if (data.vehicle_make) vehicleObj.make = data.vehicle_make;
+        if (data.vehicle_model) vehicleObj.model = data.vehicle_model;
+        if (data.vehicle_year) vehicleObj.year = data.vehicle_year;
+        if (data.vehicle_plate) vehicleObj.plate = data.vehicle_plate;
+      }
+      let contactObj = data.contact;
+      if (!contactObj || typeof contactObj !== "object") {
+        contactObj = {};
+        if (data.contact_name) contactObj.name = data.contact_name;
+        if (data.contact_phone) contactObj.phone = data.contact_phone;
+      }
+
       return {
         id: data.id,
         createdAt: data.created_at,
         userId: data.user_id,
         userEmail: data.user_email,
-        vehicle: data.vehicle,
+        vehicle: vehicleObj,
         issueDescription: data.issue_description,
-        contact: data.contact,
+        contact: contactObj,
         status: data.status,
         assignedMechanicId: data.assigned_mechanic_id,
         assignedMechanicEmail: data.assigned_mechanic_email,
