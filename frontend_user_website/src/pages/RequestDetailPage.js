@@ -52,10 +52,11 @@ export function RequestDetailPage({ user }) {
       <div className="grid2">
         <Card title="Vehicle">
           <div className="kv">
-            <div><span className="k">Make</span><span className="v">{req.vehicle.make}</span></div>
-            <div><span className="k">Model</span><span className="v">{req.vehicle.model}</span></div>
-            <div><span className="k">Year</span><span className="v">{req.vehicle.year || "—"}</span></div>
-            <div><span className="k">Plate</span><span className="v">{req.vehicle.plate || "—"}</span></div>
+            {/* ENFORCED SHAPE: vehicle = { make, model }. Fallback to "" if missing. */}
+            <div><span className="k">Make</span><span className="v">{(req.vehicle && req.vehicle.make) || ""}</span></div>
+            <div><span className="k">Model</span><span className="v">{(req.vehicle && req.vehicle.model) || ""}</span></div>
+            <div><span className="k">Year</span><span className="v">—</span></div>
+            <div><span className="k">Plate</span><span className="v">—</span></div>
           </div>
         </Card>
 

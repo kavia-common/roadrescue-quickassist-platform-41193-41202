@@ -60,7 +60,15 @@ export function MyRequestsPage({ user }) {
           columns={[
             { key: "id", header: "Request", render: (r) => <Link className="link" to={`/requests/${r.id}`}>{r.id.slice(0, 8)}</Link> },
             { key: "createdAt", header: "Created", render: (r) => new Date(r.createdAt).toLocaleString() },
-            { key: "vehicle", header: "Vehicle", render: (r) => `${r.vehicle.make} ${r.vehicle.model} ${r.vehicle.year || ""}`.trim() },
+            { 
+              key: "vehicle", 
+              header: "Vehicle", 
+              // Display vehicle as "<make> <model>", fallback to "" if undefined (ENFORCED SHAPE)
+              render: (r) => {
+                const v = r.vehicle && typeof r.vehicle === "object" ? r.vehicle : {};
+                return `${v.make || ""} ${v.model || ""}`.trim();
+              },
+            },
             { key: "status", header: "Status", render: (r) => statusBadge(r.status) },
           ]}
           rows={rows}
