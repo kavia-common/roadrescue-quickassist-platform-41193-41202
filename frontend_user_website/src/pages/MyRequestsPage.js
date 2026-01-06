@@ -60,8 +60,7 @@ export function MyRequestsPage({ user }) {
           columns={[
             { key: "id", header: "Request", render: (r) => <Link className="link" to={`/requests/${r.id}`}>{r.id.slice(0, 8)}</Link> },
             { key: "createdAt", header: "Created", render: (r) => new Date(r.createdAt).toLocaleString() },
-            { key: "vehicle", header: "Vehicle", render: (r) => [r.vehicle.make, r.vehicle.model, r.vehicle.year].filter(Boolean).join(" ") },
-            { key: "plate", header: "Plate", render: (r) => r.vehicle.plate || "—" },
+            { key: "vehicle", header: "Vehicle", render: (r) => `${r.vehicle.make} ${r.vehicle.model} ${r.vehicle.year || ""}`.trim() },
             { key: "status", header: "Status", render: (r) => statusBadge(r.status) },
           ]}
           rows={rows}

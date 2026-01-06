@@ -63,7 +63,6 @@ export function RequestDetailPage({ user }) {
           <div className="kv">
             <div><span className="k">Name</span><span className="v">{req.contact.name}</span></div>
             <div><span className="k">Phone</span><span className="v">{req.contact.phone}</span></div>
-            <div><span className="k">Email</span><span className="v">{req.contact.email || "—"}</span></div>
             <div><span className="k">Created</span><span className="v">{new Date(req.createdAt).toLocaleString()}</span></div>
           </div>
         </Card>
