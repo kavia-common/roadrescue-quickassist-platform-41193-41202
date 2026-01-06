@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { isSupabaseConfigured } from "../theme";
 
 const LS_KEYS = {
   session: "rrqa.session",
@@ -101,10 +100,25 @@ function setLocalRequests(reqs) {
   writeJson(LS_KEYS.requests, reqs);
 }
 
+function getSupabaseEnv() {
+  const url = process.env.REACT_APP_SUPABASE_URL;
+  const key = process.env.REACT_APP_SUPABASE_KEY;
+  return { url, key };
+}
+
+// PUBLIC_INTERFACE
+function isSupabaseConfigured() {
+  /** Returns true only when required REACT_APP_ Supabase env vars are present (React build-time). */
+  const { url, key } = getSupabaseEnv();
+  return Boolean(url && key);
+}
+
 function getSupabase() {
-  if (!isSupabaseConfigured()) return null;
+  const { url, key } = getSupabaseEnv();
+  if (!url || !key) return null;
+
   try {
-    return createClient(process.env.REACT_APP_SUPABASE_URL, process.env.REACT_APP_SUPABASE_KEY);
+    return createClient(url, key);
   } catch {
     return null;
   }
@@ -210,7 +224,6 @@ export const dataService = {
     ensureSeedData();
     const supabase = getSupabase();
     if (supabase) {
-      // Assumption: requests table has user_id, status, created_at, data json
       const q = supabase.from("requests").select("*").order("created_at", { ascending: false });
       const res = forUserId ? await q.eq("user_id", forUserId) : await q;
       if (res.error) throw new Error(res.error.message);
@@ -279,4 +292,7 @@ export const dataService = {
     setLocalRequests([request, ...all]);
     return request;
   },
+
+  // PUBLIC_INTERFACE
+  isSupabaseConfigured,
 };
