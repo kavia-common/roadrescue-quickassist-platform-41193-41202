@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
@@ -13,6 +13,9 @@ export function LoginPage({ onAuthed }) {
   const [password, setPassword] = useState("password123");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
+
+  const supabaseEnabled = useMemo(() => dataService.isSupabaseConfigured(), []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -28,6 +31,18 @@ export function LoginPage({ onAuthed }) {
       setError(err.message || "Login failed.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    setError("");
+    setOauthBusy(true);
+    try {
+      await dataService.loginWithGoogle({ redirectTo: window.location.origin });
+      // Typically redirects away; if it doesn't, the auth listener will update the app shell.
+    } catch (err) {
+      setError(err.message || "Google sign-in failed.");
+      setOauthBusy(false);
     }
   };
 
@@ -47,8 +62,20 @@ export function LoginPage({ onAuthed }) {
           </Link>
         }
       >
+        <div className="form" style={{ marginBottom: 12 }}>
+          <Button variant="ghost" disabled={!supabaseEnabled || oauthBusy || busy} onClick={signInWithGoogle} style={{ width: "100%" }}>
+            {oauthBusy ? "Redirecting to Google…" : "Continue with Google"}
+          </Button>
+          {!supabaseEnabled ? (
+            <div className="hint">
+              Google sign-in requires Supabase mode. Set <code>REACT_APP_SUPABASE_URL</code> and <code>REACT_APP_SUPABASE_KEY</code>.
+            </div>
+          ) : null}
+          <div className="divider" style={{ margin: "6px 0 0" }} />
+        </div>
+
         <form onSubmit={submit} className="form">
-          <Input label="Email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Input label="Email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={oauthBusy} />
           <Input
             label="Password"
             name="password"
@@ -56,10 +83,11 @@ export function LoginPage({ onAuthed }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            disabled={oauthBusy}
           />
           {error ? <div className="alert alert-error">{error}</div> : null}
           <div className="row">
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || oauthBusy}>
               {busy ? "Signing in..." : "Sign in"}
             </Button>
             <Link className="link" to="/about">

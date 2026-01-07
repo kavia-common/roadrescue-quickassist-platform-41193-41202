@@ -23,6 +23,8 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
+
+    // 1) Initial boot: load current user (handles Supabase persisted session after OAuth redirect)
     (async () => {
       const u = await dataService.getCurrentUser();
       if (mounted) {
@@ -30,12 +32,28 @@ function App() {
         setBooted(true);
       }
     })();
+
+    // 2) Keep UI in sync with Supabase auth state (no-op in mock mode)
+    const unsubscribe = dataService.subscribeToAuthChanges((nextUser) => {
+      if (!mounted) return;
+      setUser(nextUser);
+    });
+
     return () => {
       mounted = false;
+      unsubscribe?.();
     };
   }, []);
 
-  if (!booted) return <div className="app-shell"><div className="container"><div className="skeleton">Loading…</div></div></div>;
+  if (!booted) {
+    return (
+      <div className="app-shell">
+        <div className="container">
+          <div className="skeleton">Loading…</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter>
@@ -45,8 +63,8 @@ function App() {
           <Routes>
             <Route path="/" element={<Navigate to={user ? "/submit" : "/login"} replace />} />
             <Route path="/about" element={<AboutPage />} />
-            <Route path="/login" element={<LoginPage onAuthed={setUser} />} />
-            <Route path="/register" element={<RegisterPage onAuthed={setUser} />} />
+            <Route path="/login" element={user ? <Navigate to="/submit" replace /> : <LoginPage onAuthed={setUser} />} />
+            <Route path="/register" element={user ? <Navigate to="/submit" replace /> : <RegisterPage onAuthed={setUser} />} />
 
             <Route
               path="/submit"

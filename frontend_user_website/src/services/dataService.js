@@ -1,5 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
 import { normalizeStatus } from "./statusUtils";
+import { supabase, isSupabaseConfigured as isSupabaseConfiguredClient } from "./supabaseClient";
 
 const LS_KEYS = {
   session: "rrqa.session",
@@ -101,38 +101,25 @@ function setLocalRequests(reqs) {
   writeJson(LS_KEYS.requests, reqs);
 }
 
-function getSupabaseEnv() {
-  const url = process.env.REACT_APP_SUPABASE_URL;
-  const key = process.env.REACT_APP_SUPABASE_KEY;
-  return { url, key };
-}
-
 // PUBLIC_INTERFACE
 function isSupabaseConfigured() {
   /** Returns true only when required REACT_APP_ Supabase env vars are present (React build-time). */
-  const { url, key } = getSupabaseEnv();
-  return Boolean(url && key);
+  return isSupabaseConfiguredClient();
 }
 
 function getSupabase() {
-  const { url, key } = getSupabaseEnv();
-  if (!url || !key) return null;
-
-  try {
-    return createClient(url, key);
-  } catch {
-    return null;
-  }
+  // Use shared singleton client. If env vars missing, this is null (mock mode).
+  return supabase;
 }
 
-async function supaGetUserRole(supabase, userId, email) {
+async function supaGetUserRole(supa, userId, email) {
   // Minimal role table assumption: public.profiles(id uuid primary key, email text, role text, approved boolean)
   // If not present, default to "user".
   try {
-    const { data, error } = await supabase.from("profiles").select("role,approved").eq("id", userId).maybeSingle();
+    const { data, error } = await supa.from("profiles").select("role,approved").eq("id", userId).maybeSingle();
     if (error) return { role: "user", approved: true };
     if (!data) {
-      await supabase.from("profiles").insert({ id: userId, email, role: "user", approved: true });
+      await supa.from("profiles").insert({ id: userId, email, role: "user", approved: true });
       return { role: "user", approved: true };
     }
     return { role: data.role || "user", approved: data.approved ?? true };
@@ -141,22 +128,30 @@ async function supaGetUserRole(supabase, userId, email) {
   }
 }
 
+async function supaUserToAppUser(supaUser) {
+  if (!supaUser) return null;
+  const supa = getSupabase();
+  if (!supa) return null;
+  const roleInfo = await supaGetUserRole(supa, supaUser.id, supaUser.email);
+  return { id: supaUser.id, email: supaUser.email, role: roleInfo.role, approved: roleInfo.approved };
+}
+
 /*
   FIELD MAPPING NOTES (MUST BE IDENTICAL ACROSS ALL 3 FRONTENDS/SERVICES)
 
   UI form fields (local): {vehicle: {make, model, year, plate}, contact: {name, phone}, issueDescription}
-  Supabase DB columns (requests): 
-    - vehicle (jsonb: {make, model, year, plate}), 
+  Supabase DB columns (requests):
+    - vehicle (jsonb: {make, model, year, plate}),
     - contact (jsonb: {name, phone}),
-    - user_email, 
-    - assigned_mechanic_email, 
-    - notes (jsonb array), 
-    - status (text), 
+    - user_email,
+    - assigned_mechanic_email,
+    - notes (jsonb array),
+    - status (text),
     - id (db-generated UUID or provided string for local),
-    - created_at (timestamp), 
-    - user_id (uuid), 
+    - created_at (timestamp),
+    - user_id (uuid),
     - assigned_mechanic_id (uuid, nullable).
-  
+
   - When reading, always reconstruct {vehicle} and {contact} if only primitives are present or if data is stringified.
   - When writing, always persist {vehicle} and {contact} as jsonb to Supabase.
   - If future backends provide only separate fields, include non-breaking fallback to recompose.
@@ -174,14 +169,14 @@ export const dataService = {
   // PUBLIC_INTERFACE
   async register(email, password) {
     ensureSeedData();
-    const supabase = getSupabase();
-    if (supabase) {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+    const supa = getSupabase();
+    if (supa) {
+      const { data, error } = await supa.auth.signUp({ email, password });
       if (error) throw new Error(error.message);
       // When email confirmation is enabled, user might be null; still return.
       const user = data.user;
       if (user) {
-        const roleInfo = await supaGetUserRole(supabase, user.id, email);
+        const roleInfo = await supaGetUserRole(supa, user.id, email);
         return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
       }
       return { id: "pending", email, role: "user", approved: true };
@@ -200,12 +195,12 @@ export const dataService = {
   // PUBLIC_INTERFACE
   async login(email, password) {
     ensureSeedData();
-    const supabase = getSupabase();
-    if (supabase) {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const supa = getSupabase();
+    if (supa) {
+      const { data, error } = await supa.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message);
       const user = data.user;
-      const roleInfo = await supaGetUserRole(supabase, user.id, user.email);
+      const roleInfo = await supaGetUserRole(supa, user.id, user.email);
       return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
     }
 
@@ -217,10 +212,32 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
+  async loginWithGoogle({ redirectTo } = {}) {
+    /** Starts Supabase OAuth sign-in with Google (Supabase mode only). */
+    const supa = getSupabase();
+    if (!supa) {
+      throw new Error("Supabase is not configured. Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_KEY to enable Google sign-in.");
+    }
+
+    const finalRedirect = redirectTo || window.location.origin;
+
+    const { error } = await supa.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: finalRedirect,
+      },
+    });
+
+    // On success the browser will redirect away; if we get here, it either errored or popup-based flows.
+    if (error) throw new Error(error.message);
+    return true;
+  },
+
+  // PUBLIC_INTERFACE
   async logout() {
-    const supabase = getSupabase();
-    if (supabase) {
-      await supabase.auth.signOut();
+    const supa = getSupabase();
+    if (supa) {
+      await supa.auth.signOut();
       return;
     }
     clearLocalSession();
@@ -229,12 +246,12 @@ export const dataService = {
   // PUBLIC_INTERFACE
   async getCurrentUser() {
     ensureSeedData();
-    const supabase = getSupabase();
-    if (supabase) {
-      const { data } = await supabase.auth.getUser();
+    const supa = getSupabase();
+    if (supa) {
+      const { data } = await supa.auth.getUser();
       const user = data?.user;
       if (!user) return null;
-      const roleInfo = await supaGetUserRole(supabase, user.id, user.email);
+      const roleInfo = await supaGetUserRole(supa, user.id, user.email);
       return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
     }
 
@@ -247,11 +264,41 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
+  subscribeToAuthChanges(onUserChanged) {
+    /**
+     * Subscribe to Supabase auth state changes.
+     *
+     * Returns an unsubscribe function.
+     * No-op in mock mode.
+     */
+    const supa = getSupabase();
+    if (!supa) return () => {};
+
+    const {
+      data: { subscription },
+    } = supa.auth.onAuthStateChange(async (_event, session) => {
+      try {
+        const next = session?.user ? await supaUserToAppUser(session.user) : null;
+        onUserChanged?.(next);
+      } catch {
+        // If role/profile fetch fails, still set basic identity to avoid blocking UX.
+        onUserChanged?.(
+          session?.user
+            ? { id: session.user.id, email: session.user.email, role: "user", approved: true }
+            : null
+        );
+      }
+    });
+
+    return () => subscription?.unsubscribe?.();
+  },
+
+  // PUBLIC_INTERFACE
   async listRequests({ forUserId } = {}) {
     ensureSeedData();
-    const supabase = getSupabase();
-    if (supabase) {
-      const q = supabase.from("requests").select("*").order("created_at", { ascending: false });
+    const supa = getSupabase();
+    if (supa) {
+      const q = supa.from("requests").select("*").order("created_at", { ascending: false });
       const res = forUserId ? await q.eq("user_id", forUserId) : await q;
       if (res.error) throw new Error(res.error.message);
       return (res.data || []).map((r) => {
@@ -271,7 +318,7 @@ export const dataService = {
         // Only expose 'make' and 'model' keys; guaranteed present for UI
         vehicle = {
           make: typeof vehicle.make === "string" ? vehicle.make : "",
-          model: typeof vehicle.model === "string" ? vehicle.model : ""
+          model: typeof vehicle.model === "string" ? vehicle.model : "",
         };
         // Defensive for contact
         let contact = r.contact;
@@ -310,13 +357,13 @@ export const dataService = {
   // PUBLIC_INTERFACE
   async createRequest({ user, vehicle, issueDescription, contact }) {
     ensureSeedData();
-    const supabase = getSupabase();
+    const supa = getSupabase();
     const nowIso = new Date().toISOString();
 
     // ENFORCED: Write vehicle as {make, model} ONLY for every create (ignore year/plate).
     const safeVehicle = {
-      make: (vehicle && typeof vehicle.make === "string") ? vehicle.make : "",
-      model: (vehicle && typeof vehicle.model === "string") ? vehicle.model : ""
+      make: vehicle && typeof vehicle.make === "string" ? vehicle.make : "",
+      model: vehicle && typeof vehicle.model === "string" ? vehicle.model : "",
     };
     // Contact full, for UI/possible future
     const safeContact = {
@@ -339,7 +386,7 @@ export const dataService = {
       notes: [],
     };
 
-    if (supabase) {
+    if (supa) {
       // Prepare payload for Supabase: vehicle={make,model}, status="open", omit id, only valid/null UUIDs, no custom fields.
       const insertPayload = {
         created_at: nowIso,
@@ -354,11 +401,7 @@ export const dataService = {
         notes: [],
       };
       // Use .select() to get server-inserted row for ID
-      const { data, error } = await supabase
-        .from("requests")
-        .insert(insertPayload)
-        .select()
-        .maybeSingle();
+      const { data, error } = await supa.from("requests").insert(insertPayload).select().maybeSingle();
 
       if (error) throw new Error(error.message);
       if (!data) throw new Error("Failed to insert request.");
@@ -372,7 +415,7 @@ export const dataService = {
       }
       vehicleObj = {
         make: typeof vehicleObj.make === "string" ? vehicleObj.make : "",
-        model: typeof vehicleObj.model === "string" ? vehicleObj.model : ""
+        model: typeof vehicleObj.model === "string" ? vehicleObj.model : "",
       };
       let contactObj = data.contact;
       if (!contactObj || typeof contactObj !== "object") {
