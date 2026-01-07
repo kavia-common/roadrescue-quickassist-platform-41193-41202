@@ -13,6 +13,7 @@ import { SubmitRequestPage } from "./pages/SubmitRequestPage";
 import { MyRequestsPage } from "./pages/MyRequestsPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { AboutPage } from "./pages/AboutPage";
+import { TwilioSmsDemoCard } from "./components/demo/TwilioSmsDemoCard";
 
 // PUBLIC_INTERFACE
 function App() {
@@ -68,6 +69,21 @@ function App() {
               element={
                 <RequireAuth user={user}>
                   <RequestDetailPage user={user} />
+                </RequireAuth>
+              }
+            />
+
+            <Route
+              path="/demo-sms"
+              element={
+                <RequireAuth user={user}>
+                  <div className="container">
+                    <div className="hero">
+                      <h1 className="h1">SMS Demo</h1>
+                      <p className="lead">Simulate the mocked “Mechanic accepts job” event.</p>
+                    </div>
+                    <TwilioSmsDemoCard title="Mechanic accepts job (Demo)" />
+                  </div>
                 </RequireAuth>
               }
             />
