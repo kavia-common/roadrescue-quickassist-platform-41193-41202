@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { dataService } from "../services/dataService";
+import { statusLabel } from "../services/statusUtils";
 
 // PUBLIC_INTERFACE
 export function RequestDetailPage({ user }) {
@@ -46,7 +47,9 @@ export function RequestDetailPage({ user }) {
     <div className="container">
       <div className="hero">
         <h1 className="h1">Request {req.id.slice(0, 8)}</h1>
-        <p className="lead">Status: <strong>{req.status}</strong></p>
+        <p className="lead">
+          Status: <strong>{statusLabel(req.status)}</strong>
+        </p>
       </div>
 
       <div className="grid2">

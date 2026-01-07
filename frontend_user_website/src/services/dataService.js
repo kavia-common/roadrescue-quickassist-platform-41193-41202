@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { normalizeStatus } from "./statusUtils";
 
 const LS_KEYS = {
   session: "rrqa.session",
@@ -288,7 +289,7 @@ export const dataService = {
           vehicle,
           issueDescription: r.issue_description,
           contact,
-          status: r.status,
+          status: normalizeStatus(r.status),
           assignedMechanicId: r.assigned_mechanic_id,
           assignedMechanicEmail: r.assigned_mechanic_email,
           notes: r.notes || [],

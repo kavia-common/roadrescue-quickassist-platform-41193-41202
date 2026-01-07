@@ -3,19 +3,10 @@ import { Link } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Table } from "../components/ui/Table";
 import { dataService } from "../services/dataService";
+import { statusBadgeClass, statusLabel } from "../services/statusUtils";
 
 function statusBadge(status) {
-  const map = {
-    Submitted: "badge badge-blue",
-    "In Review": "badge badge-amber",
-    Assigned: "badge badge-blue",
-    "In Progress": "badge badge-blue",
-    Completed: "badge badge-green",
-    Accepted: "badge badge-blue",
-    "En Route": "badge badge-amber",
-    Working: "badge badge-amber",
-  };
-  return <span className={map[status] || "badge"}>{status}</span>;
+  return <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>;
 }
 
 // PUBLIC_INTERFACE
