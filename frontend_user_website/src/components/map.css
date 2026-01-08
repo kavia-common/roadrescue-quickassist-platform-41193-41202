@@ -1,0 +1,65 @@
+.rrqa-map-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.rrqa-map-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.06), rgba(255, 255, 255, 0));
+  border-bottom: 1px solid var(--border);
+}
+
+.rrqa-map-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.rrqa-map-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.rrqa-map-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.85);
+}
+
+.rrqa-map-frame {
+  padding: 12px;
+  background: rgba(249, 250, 251, 1);
+}
+
+.rrqa-map-canvas {
+  width: 100%;
+  height: 350px;
+  border-radius: 12px;
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.06);
+  overflow: hidden;
+}
+
+/* Leaflet internal tweaks to match app aesthetics */
+.rrqa-map-canvas .leaflet-control-zoom a {
+  border-radius: 10px;
+}
+
+.rrqa-map-canvas .leaflet-control-zoom a:hover {
+  filter: brightness(0.98);
+}
+
+@media (max-width: 720px) {
+  .rrqa-map-canvas {
+    height: 280px;
+  }
+}

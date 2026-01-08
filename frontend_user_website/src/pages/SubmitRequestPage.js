@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
+import MapView from "../components/MapView";
 import { dataService } from "../services/dataService";
 
 // PUBLIC_INTERFACE
@@ -111,6 +112,9 @@ export function SubmitRequestPage({ user }) {
               required
             />
           </div>
+
+          {/* OpenStreetMap preview (default: Chennai). Later you can bind lat/lng to location form fields. */}
+          <MapView lat={13.0827} lng={80.2707} />
 
           {error ? <div className="alert alert-error">{error}</div> : null}
 
