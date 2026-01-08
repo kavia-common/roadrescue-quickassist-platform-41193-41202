@@ -37,6 +37,24 @@ function validateLatLngStrings(latStr, lngStr) {
   };
 }
 
+function formatCoordsText(latStr, lngStr) {
+  // Copy-friendly, deterministic format. If inputs are invalid, use Chennai as safe fallback.
+  const lat = Number(latStr);
+  const lng = Number(lngStr);
+  const safeLat = Number.isFinite(lat) ? lat : CHENNAI.lat;
+  const safeLng = Number.isFinite(lng) ? lng : CHENNAI.lng;
+  return `${safeLat.toFixed(5)}, ${safeLng.toFixed(5)}`;
+}
+
+function geolocationErrorToMessage(err) {
+  if (!err) return "Unable to fetch your location.";
+  // https://developer.mozilla.org/en-US/docs/Web/API/GeolocationPositionError/code
+  if (err.code === 1) return "Location permission denied. You can enter coordinates manually.";
+  if (err.code === 2) return "Location unavailable. Please try again or enter coordinates manually.";
+  if (err.code === 3) return "Location request timed out. Please try again.";
+  return err.message || "Unable to fetch your location.";
+}
+
 // PUBLIC_INTERFACE
 export function SubmitRequestPage({ user }) {
   /** Form to submit a new breakdown request. */
@@ -46,6 +64,10 @@ export function SubmitRequestPage({ user }) {
   const [contact, setContact] = useState({ name: "", phone: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // Share Location UI feedback (kept separate from form validation error)
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoStatus, setGeoStatus] = useState({ type: "", message: "" }); // success|error|info
 
   // Controlled location inputs (strings so users can type partial values like "-" or "13.")
   const [latInput, setLatInput] = useState(String(CHENNAI.lat));
@@ -75,6 +97,91 @@ export function SubmitRequestPage({ user }) {
 
     return () => window.clearTimeout(t);
   }, [latInput, lngInput, locationValidation.ok]);
+
+  const setCoordinatesFromNumbers = (lat, lng, { silent = false } = {}) => {
+    const nextLat = Number(lat);
+    const nextLng = Number(lng);
+
+    // If values are invalid, keep Chennai defaults (as requested).
+    const latOk = Number.isFinite(nextLat) && nextLat >= -90 && nextLat <= 90;
+    const lngOk = Number.isFinite(nextLng) && nextLng >= -180 && nextLng <= 180;
+
+    if (!latOk || !lngOk) {
+      setLatInput(String(CHENNAI.lat));
+      setLngInput(String(CHENNAI.lng));
+      if (!silent) {
+        setGeoStatus({
+          type: "error",
+          message: "Received invalid coordinates from the browser. Falling back to Chennai defaults.",
+        });
+      }
+      return;
+    }
+
+    // Use a consistent precision for better UX + easy copy/paste
+    setLatInput(nextLat.toFixed(5));
+    setLngInput(nextLng.toFixed(5));
+    if (!silent) setGeoStatus({ type: "success", message: "Location detected and applied." });
+  };
+
+  // PUBLIC_INTERFACE
+  const useMyLocation = async () => {
+    /** Use browser Geolocation API to fill lat/lng inputs; keeps Chennai fallback on failure. */
+    setGeoStatus({ type: "", message: "" });
+
+    if (!("geolocation" in navigator)) {
+      setGeoStatus({
+        type: "error",
+        message: "Geolocation is not supported in this browser. Please enter coordinates manually.",
+      });
+      return;
+    }
+
+    setGeoBusy(true);
+
+    try {
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 30_000,
+        });
+      });
+
+      const lat = pos?.coords?.latitude;
+      const lng = pos?.coords?.longitude;
+
+      setCoordinatesFromNumbers(lat, lng);
+    } catch (e) {
+      // Keep Chennai defaults; do not overwrite existing typed coordinates on failure.
+      setGeoStatus({ type: "error", message: geolocationErrorToMessage(e) });
+    } finally {
+      setGeoBusy(false);
+    }
+  };
+
+  // PUBLIC_INTERFACE
+  const copyCoordinates = async () => {
+    /** Copy the current lat/lng to clipboard using the browser Clipboard API. */
+    setGeoStatus({ type: "", message: "" });
+
+    const text = formatCoordsText(latInput.trim(), lngInput.trim());
+
+    if (!navigator.clipboard?.writeText) {
+      setGeoStatus({
+        type: "error",
+        message: "Clipboard is not available in this browser context. Please copy the values manually.",
+      });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setGeoStatus({ type: "success", message: `Copied: ${text}` });
+    } catch {
+      setGeoStatus({ type: "error", message: "Could not copy to clipboard. Please try again." });
+    }
+  };
 
   const validate = () => {
     if (!vehicle.make.trim()) return "Vehicle make is required.";
@@ -160,30 +267,81 @@ export function SubmitRequestPage({ user }) {
                   Location (Lat/Lng)
                 </h3>
                 <p className="card-subtitle" style={{ margin: "6px 0 0" }}>
-                  Enter coordinates manually. Invalid values will fall back to Chennai defaults.
+                  Enter coordinates manually or use your current location. Invalid values fall back to Chennai defaults.
                 </p>
               </div>
             </div>
 
             <div className="card-body">
-              <div className="grid2">
+              {/* Share Location controls */}
+              <div
+                className="row"
+                style={{
+                  marginTop: 0,
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  gap: 10,
+                }}
+              >
+                <Button
+                  type="button"
+                  onClick={useMyLocation}
+                  disabled={geoBusy || busy}
+                  style={{ minWidth: 160 }}
+                >
+                  {geoBusy ? "Detecting…" : "Use My Location"}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={copyCoordinates}
+                  disabled={geoBusy || busy}
+                  style={{ minWidth: 150 }}
+                >
+                  Copy Coordinates
+                </Button>
+
+                <div className="hint" style={{ margin: 0 }}>
+                  {("geolocation" in navigator) ? "Uses browser GPS permissions." : "Geolocation unavailable."}
+                </div>
+              </div>
+
+              {geoStatus.message ? (
+                <div
+                  className={`alert ${geoStatus.type === "success" ? "alert-success" : geoStatus.type === "error" ? "alert-error" : ""}`}
+                  style={{ marginTop: 10 }}
+                >
+                  {geoStatus.message}
+                </div>
+              ) : null}
+
+              <div className="grid2" style={{ marginTop: 10 }}>
                 <Input
                   label="Latitude"
                   name="latitude"
                   value={latInput}
-                  onChange={(e) => setLatInput(e.target.value)}
+                  onChange={(e) => {
+                    setGeoStatus({ type: "", message: "" });
+                    setLatInput(e.target.value);
+                  }}
                   placeholder="13.0827"
                   hint="Range: -90 to 90"
                   error={latInput.trim() && locationValidation.latError ? locationValidation.latError : ""}
+                  disabled={geoBusy}
                 />
                 <Input
                   label="Longitude"
                   name="longitude"
                   value={lngInput}
-                  onChange={(e) => setLngInput(e.target.value)}
+                  onChange={(e) => {
+                    setGeoStatus({ type: "", message: "" });
+                    setLngInput(e.target.value);
+                  }}
                   placeholder="80.2707"
                   hint="Range: -180 to 180"
                   error={lngInput.trim() && locationValidation.lngError ? locationValidation.lngError : ""}
+                  disabled={geoBusy}
                 />
               </div>
 
@@ -233,10 +391,10 @@ export function SubmitRequestPage({ user }) {
           {error ? <div className="alert alert-error">{error}</div> : null}
 
           <div className="row">
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || geoBusy}>
               {busy ? "Submitting..." : "Submit request"}
             </Button>
-            <Button variant="secondary" type="button" onClick={() => navigate("/requests")}>
+            <Button variant="secondary" type="button" onClick={() => navigate("/requests")} disabled={geoBusy}>
               View my requests
             </Button>
           </div>

@@ -163,6 +163,16 @@ a{color:inherit}
   background: rgba(239,68,68,0.08);
   color: #991B1B;
 }
+.alert-success{
+  border-color: rgba(16,185,129,0.28);
+  background: rgba(16,185,129,0.10);
+  color: #065F46;
+}
+.alert-info{
+  border-color: rgba(37,99,235,0.25);
+  background: rgba(37,99,235,0.08);
+  color: #1D4ED8;
+}
 
 .badge{
   display:inline-flex;
