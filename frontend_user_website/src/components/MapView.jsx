@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "./map.css";
 
@@ -32,6 +32,9 @@ export default function MapView({ lat, lng, zoom = 13, className = "" }) {
   const containerId = useMemo(() => `rrqa-map-${Math.random().toString(16).slice(2)}`, []);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
+
+  // Local UI state (in-map): toggle "documentation/help overlay" vs live map view.
+  const [showDocs, setShowDocs] = useState(false);
 
   const safeLat = Number.isFinite(Number(lat)) ? Number(lat) : CHENNAI.lat;
   const safeLng = Number.isFinite(Number(lng)) ? Number(lng) : CHENNAI.lng;
@@ -81,19 +84,96 @@ export default function MapView({ lat, lng, zoom = 13, className = "" }) {
     map.setView(next, zoom, { animate: true });
   }, [safeLat, safeLng, zoom]);
 
+  useEffect(() => {
+    // When returning from docs overlay, Leaflet sometimes needs an invalidateSize()
+    // because the map container might have been visually covered.
+    if (!showDocs) {
+      const map = mapRef.current;
+      if (map) {
+        // Defer to next frame so layout is final.
+        window.requestAnimationFrame(() => {
+          try {
+            map.invalidateSize();
+          } catch {
+            // no-op
+          }
+        });
+      }
+    }
+  }, [showDocs]);
+
+  const openDocs = () => setShowDocs(true);
+  const closeDocs = () => setShowDocs(false);
+
   return (
     <div className={`rrqa-map-card ${className}`}>
       <div className="rrqa-map-header">
         <div>
           <div className="rrqa-map-title">Breakdown location</div>
           <div className="rrqa-map-subtitle">
-            Map preview (OpenStreetMap). Coordinates: <span className="rrqa-map-mono">{safeLat.toFixed(5)}, {safeLng.toFixed(5)}</span>
+            Map preview (OpenStreetMap). Coordinates:{" "}
+            <span className="rrqa-map-mono">
+              {safeLat.toFixed(5)}, {safeLng.toFixed(5)}
+            </span>
           </div>
+        </div>
+
+        <div className="rrqa-map-actions">
+          <button type="button" className="rrqa-map-help-btn" onClick={openDocs} aria-label="Open map help and documentation">
+            Help
+          </button>
         </div>
       </div>
 
       <div className="rrqa-map-frame" role="region" aria-label="Breakdown location map preview">
-        <div id={containerId} className="rrqa-map-canvas" />
+        <div className="rrqa-map-stage">
+          <div
+            id={containerId}
+            className={`rrqa-map-canvas ${showDocs ? "rrqa-map-hidden" : ""}`}
+            aria-hidden={showDocs ? "true" : "false"}
+          />
+
+          {showDocs ? (
+            <div className="rrqa-map-docs" role="dialog" aria-modal="true" aria-label="Map help and documentation">
+              <div className="rrqa-map-docs-header">
+                <button type="button" className="rrqa-map-back-btn" onClick={closeDocs} aria-label="Back to map">
+                  <span aria-hidden="true">←</span>
+                  <span className="rrqa-map-back-label">Back</span>
+                </button>
+                <div className="rrqa-map-docs-title">Map help</div>
+              </div>
+
+              <div className="rrqa-map-docs-body">
+                <p className="rrqa-map-docs-lead">
+                  This is a simple Leaflet (OpenStreetMap) preview used for the MVP. It doesn’t track your real location.
+                </p>
+
+                <div className="rrqa-map-docs-section">
+                  <div className="rrqa-map-docs-h">Controls</div>
+                  <ul className="rrqa-map-docs-list">
+                    <li>
+                      Use <strong>+</strong> / <strong>−</strong> to zoom.
+                    </li>
+                    <li>Drag to pan around.</li>
+                    <li>The marker indicates the currently selected coordinates.</li>
+                  </ul>
+                </div>
+
+                <div className="rrqa-map-docs-section">
+                  <div className="rrqa-map-docs-h">Notes</div>
+                  <ul className="rrqa-map-docs-list">
+                    <li>
+                      Returning to the map uses in-app state (no page refresh). If tiles look off, try zooming once.
+                    </li>
+                    <li>
+                      Future versions can bind the location to form fields (GPS, address search, etc.).
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
