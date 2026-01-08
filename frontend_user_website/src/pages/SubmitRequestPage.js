@@ -46,13 +46,77 @@ function formatCoordsText(latStr, lngStr) {
   return `${safeLat.toFixed(5)}, ${safeLng.toFixed(5)}`;
 }
 
+function isSecureEnoughForBrowserAPIs() {
+  // Some browser APIs (geolocation, clipboard) require secure context.
+  // "http://localhost" is treated as secure; arbitrary http origins are not.
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname === "[::1]";
+
+  return window.isSecureContext || isLocalhost;
+}
+
+async function queryGeoPermissionState() {
+  // Use Permissions API when available.
+  // Note: Safari may not support navigator.permissions or "geolocation" name.
+  if (!navigator.permissions?.query) return { supported: false, state: "unknown" };
+  try {
+    const result = await navigator.permissions.query({ name: "geolocation" });
+    return { supported: true, state: result?.state || "unknown" };
+  } catch {
+    return { supported: false, state: "unknown" };
+  }
+}
+
 function geolocationErrorToMessage(err) {
   if (!err) return "Unable to fetch your location.";
+
   // https://developer.mozilla.org/en-US/docs/Web/API/GeolocationPositionError/code
-  if (err.code === 1) return "Location permission denied. You can enter coordinates manually.";
-  if (err.code === 2) return "Location unavailable. Please try again or enter coordinates manually.";
-  if (err.code === 3) return "Location request timed out. Please try again.";
+  if (err.code === 1) {
+    return "Location permission denied. Please allow location access in your browser settings, then try again (or enter coordinates manually).";
+  }
+  if (err.code === 2) {
+    return "Location unavailable. Please check GPS/network and try again, or enter coordinates manually.";
+  }
+  if (err.code === 3) {
+    return "Location request timed out. Try again (or move to an area with better GPS signal).";
+  }
+
   return err.message || "Unable to fetch your location.";
+}
+
+async function tryClipboardWriteText(text) {
+  // Prefer async Clipboard API when available & allowed.
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  return false;
+}
+
+function execCommandCopyFallback(text) {
+  // Fallback for older browsers / blocked clipboard API.
+  // Uses a temporary textarea and document.execCommand('copy').
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    // Keep it off-screen, but in the document
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.left = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+
+    const ok = document.execCommand && document.execCommand("copy");
+    document.body.removeChild(ta);
+    return Boolean(ok);
+  } catch {
+    return false;
+  }
 }
 
 // PUBLIC_INTERFACE
@@ -76,6 +140,10 @@ export function SubmitRequestPage({ user }) {
   // Debounced map location (numbers)
   const [mapLat, setMapLat] = useState(CHENNAI.lat);
   const [mapLng, setMapLng] = useState(CHENNAI.lng);
+
+  const secureContextOk = useMemo(() => isSecureEnoughForBrowserAPIs(), []);
+  const geoSupported = useMemo(() => "geolocation" in navigator, []);
+  const canAttemptGeolocation = secureContextOk && geoSupported;
 
   const locationValidation = useMemo(
     () => validateLatLngStrings(latInput.trim(), lngInput.trim()),
@@ -129,7 +197,16 @@ export function SubmitRequestPage({ user }) {
     /** Use browser Geolocation API to fill lat/lng inputs; keeps Chennai fallback on failure. */
     setGeoStatus({ type: "", message: "" });
 
-    if (!("geolocation" in navigator)) {
+    if (!secureContextOk) {
+      setGeoStatus({
+        type: "error",
+        message:
+          "Use My Location requires a secure connection (HTTPS) or localhost. Please switch to HTTPS, or enter coordinates manually.",
+      });
+      return;
+    }
+
+    if (!geoSupported) {
       setGeoStatus({
         type: "error",
         message: "Geolocation is not supported in this browser. Please enter coordinates manually.",
@@ -140,10 +217,21 @@ export function SubmitRequestPage({ user }) {
     setGeoBusy(true);
 
     try {
+      // If Permissions API is available, check for an explicit deny (helps provide clearer guidance).
+      const perm = await queryGeoPermissionState();
+      if (perm.supported && perm.state === "denied") {
+        setGeoStatus({
+          type: "error",
+          message:
+            "Location permission is blocked for this site. Please open your browser site settings and set Location to “Allow”, then try again.",
+        });
+        return;
+      }
+
       const pos = await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
-          timeout: 12000,
+          timeout: 15000,
           maximumAge: 30_000,
         });
       });
@@ -153,7 +241,7 @@ export function SubmitRequestPage({ user }) {
 
       setCoordinatesFromNumbers(lat, lng);
     } catch (e) {
-      // Keep Chennai defaults; do not overwrite existing typed coordinates on failure.
+      // Keep existing typed coordinates on failure.
       setGeoStatus({ type: "error", message: geolocationErrorToMessage(e) });
     } finally {
       setGeoBusy(false);
@@ -162,24 +250,44 @@ export function SubmitRequestPage({ user }) {
 
   // PUBLIC_INTERFACE
   const copyCoordinates = async () => {
-    /** Copy the current lat/lng to clipboard using the browser Clipboard API. */
+    /** Copy the current lat/lng to clipboard using Clipboard API, with execCommand fallback. */
     setGeoStatus({ type: "", message: "" });
 
     const text = formatCoordsText(latInput.trim(), lngInput.trim());
 
-    if (!navigator.clipboard?.writeText) {
+    // Try modern clipboard first (secure context), then fallback.
+    try {
+      if (secureContextOk) {
+        const ok = await tryClipboardWriteText(text);
+        if (ok) {
+          setGeoStatus({ type: "success", message: `Copied: ${text}` });
+          return;
+        }
+      }
+
+      // Fallback path
+      const fallbackOk = execCommandCopyFallback(text);
+      if (fallbackOk) {
+        setGeoStatus({
+          type: "success",
+          message: `Copied (fallback): ${text}`,
+        });
+        return;
+      }
+
+      // If we get here, both approaches failed.
       setGeoStatus({
         type: "error",
-        message: "Clipboard is not available in this browser context. Please copy the values manually.",
+        message:
+          "Could not copy automatically (clipboard blocked). Please select the Latitude/Longitude fields and copy manually.",
       });
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setGeoStatus({ type: "success", message: `Copied: ${text}` });
-    } catch {
-      setGeoStatus({ type: "error", message: "Could not copy to clipboard. Please try again." });
+    } catch (e) {
+      setGeoStatus({
+        type: "error",
+        message: e?.message
+          ? `Could not copy: ${e.message}`
+          : "Could not copy to clipboard. Please try again or copy manually.",
+      });
     }
   };
 
@@ -273,6 +381,12 @@ export function SubmitRequestPage({ user }) {
             </div>
 
             <div className="card-body">
+              {!secureContextOk ? (
+                <div className="alert alert-info" style={{ marginBottom: 10 }}>
+                  Location and clipboard features work best over <strong>HTTPS</strong> (or localhost). Current origin is not a secure context, so browser permissions may be blocked.
+                </div>
+              ) : null}
+
               {/* Share Location controls */}
               <div
                 className="row"
@@ -286,8 +400,15 @@ export function SubmitRequestPage({ user }) {
                 <Button
                   type="button"
                   onClick={useMyLocation}
-                  disabled={geoBusy || busy}
+                  disabled={!canAttemptGeolocation || geoBusy || busy}
                   style={{ minWidth: 160 }}
+                  title={
+                    !canAttemptGeolocation
+                      ? !geoSupported
+                        ? "Geolocation is not supported by this browser."
+                        : "Requires HTTPS (or localhost) to request location."
+                      : ""
+                  }
                 >
                   {geoBusy ? "Detecting…" : "Use My Location"}
                 </Button>
@@ -298,18 +419,19 @@ export function SubmitRequestPage({ user }) {
                   onClick={copyCoordinates}
                   disabled={geoBusy || busy}
                   style={{ minWidth: 150 }}
+                  title={!secureContextOk ? "Clipboard API may be blocked on non-HTTPS. A fallback copy method will be attempted." : ""}
                 >
                   Copy Coordinates
                 </Button>
 
                 <div className="hint" style={{ margin: 0 }}>
-                  {("geolocation" in navigator) ? "Uses browser GPS permissions." : "Geolocation unavailable."}
+                  {geoSupported ? (secureContextOk ? "Uses browser GPS permissions." : "Needs HTTPS/localhost for GPS permissions.") : "Geolocation unavailable."}
                 </div>
               </div>
 
               {geoStatus.message ? (
                 <div
-                  className={`alert ${geoStatus.type === "success" ? "alert-success" : geoStatus.type === "error" ? "alert-error" : ""}`}
+                  className={`alert ${geoStatus.type === "success" ? "alert-success" : geoStatus.type === "error" ? "alert-error" : "alert-info"}`}
                   style={{ marginTop: 10 }}
                 >
                   {geoStatus.message}
