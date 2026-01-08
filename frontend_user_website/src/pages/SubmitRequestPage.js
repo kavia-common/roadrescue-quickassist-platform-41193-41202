@@ -1,10 +1,41 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import MapView from "../components/MapView";
 import { dataService } from "../services/dataService";
+
+const CHENNAI = { lat: 13.0827, lng: 80.2707 };
+
+function isFiniteNumberString(value) {
+  if (value === "" || value === null || value === undefined) return false;
+  const n = Number(value);
+  return Number.isFinite(n);
+}
+
+function validateLatLngStrings(latStr, lngStr) {
+  // Empty is treated as invalid, caller may show helper and/or fallback.
+  if (!isFiniteNumberString(latStr) || !isFiniteNumberString(lngStr)) {
+    return {
+      ok: false,
+      latError: "Enter a number (e.g., 13.0827).",
+      lngError: "Enter a number (e.g., 80.2707).",
+    };
+  }
+
+  const lat = Number(latStr);
+  const lng = Number(lngStr);
+
+  const latOk = lat >= -90 && lat <= 90;
+  const lngOk = lng >= -180 && lng <= 180;
+
+  return {
+    ok: latOk && lngOk,
+    latError: latOk ? "" : "Latitude must be between -90 and 90.",
+    lngError: lngOk ? "" : "Longitude must be between -180 and 180.",
+  };
+}
 
 // PUBLIC_INTERFACE
 export function SubmitRequestPage({ user }) {
@@ -16,12 +47,43 @@ export function SubmitRequestPage({ user }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // Controlled location inputs (strings so users can type partial values like "-" or "13.")
+  const [latInput, setLatInput] = useState(String(CHENNAI.lat));
+  const [lngInput, setLngInput] = useState(String(CHENNAI.lng));
+
+  // Debounced map location (numbers)
+  const [mapLat, setMapLat] = useState(CHENNAI.lat);
+  const [mapLng, setMapLng] = useState(CHENNAI.lng);
+
+  const locationValidation = useMemo(
+    () => validateLatLngStrings(latInput.trim(), lngInput.trim()),
+    [latInput, lngInput]
+  );
+
+  // Debounce updates to MapView to avoid excessive rerenders while typing.
+  // If invalid/empty values are present, fallback to Chennai.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (locationValidation.ok) {
+        setMapLat(Number(latInput));
+        setMapLng(Number(lngInput));
+      } else {
+        setMapLat(CHENNAI.lat);
+        setMapLng(CHENNAI.lng);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(t);
+  }, [latInput, lngInput, locationValidation.ok]);
+
   const validate = () => {
     if (!vehicle.make.trim()) return "Vehicle make is required.";
     if (!vehicle.model.trim()) return "Vehicle model is required.";
     if (!issueDescription.trim()) return "Issue description is required.";
     if (!contact.name.trim()) return "Contact name is required.";
     if (!contact.phone.trim()) return "Contact phone is required.";
+    // Note: We intentionally do NOT block submission on invalid lat/lng in this MVP,
+    // because location is not persisted yet; the map falls back to Chennai.
     return "";
   };
 
@@ -82,6 +144,58 @@ export function SubmitRequestPage({ user }) {
             />
           </div>
 
+          {/* Location inputs */}
+          <div
+            className="card"
+            style={{
+              borderRadius: 14,
+              overflow: "hidden",
+              boxShadow: "var(--shadow-sm)",
+              marginTop: 4,
+            }}
+          >
+            <div className="card-header">
+              <div>
+                <h3 className="card-title" style={{ margin: 0 }}>
+                  Location (Lat/Lng)
+                </h3>
+                <p className="card-subtitle" style={{ margin: "6px 0 0" }}>
+                  Enter coordinates manually. Invalid values will fall back to Chennai defaults.
+                </p>
+              </div>
+            </div>
+
+            <div className="card-body">
+              <div className="grid2">
+                <Input
+                  label="Latitude"
+                  name="latitude"
+                  value={latInput}
+                  onChange={(e) => setLatInput(e.target.value)}
+                  placeholder="13.0827"
+                  hint="Range: -90 to 90"
+                  error={latInput.trim() && locationValidation.latError ? locationValidation.latError : ""}
+                />
+                <Input
+                  label="Longitude"
+                  name="longitude"
+                  value={lngInput}
+                  onChange={(e) => setLngInput(e.target.value)}
+                  placeholder="80.2707"
+                  hint="Range: -180 to 180"
+                  error={lngInput.trim() && locationValidation.lngError ? locationValidation.lngError : ""}
+                />
+              </div>
+
+              <div className="hint" style={{ marginTop: 6 }}>
+                Map updates live (debounced). Current map target:{" "}
+                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                  {mapLat.toFixed(5)}, {mapLng.toFixed(5)}
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div className="field">
             <label className="label" htmlFor="issue">
               Issue description <span className="req">*</span>
@@ -113,8 +227,8 @@ export function SubmitRequestPage({ user }) {
             />
           </div>
 
-          {/* OpenStreetMap preview (default: Chennai). Later you can bind lat/lng to location form fields. */}
-          <MapView lat={13.0827} lng={80.2707} />
+          {/* OpenStreetMap preview (bound to the Lat/Lng inputs). */}
+          <MapView lat={mapLat} lng={mapLng} />
 
           {error ? <div className="alert alert-error">{error}</div> : null}
 
