@@ -34,6 +34,9 @@ create table if not exists public.profiles (
 );
 
 -- REQUESTS: persisted breakdown requests and mechanic assignment/status
+-- Location fields:
+--   address: user-entered / geocoded address display string
+--   lat/lon: coordinates resolved via geocoding (Nominatim) or GPS fallback
 create table if not exists public.requests (
   id text primary key,
   created_at timestamptz not null default now(),
@@ -42,6 +45,9 @@ create table if not exists public.requests (
   vehicle jsonb,
   issue_description text,
   contact jsonb,
+  address text,
+  lat double precision,
+  lon double precision,
   status text,
   assigned_mechanic_id uuid references auth.users(id) on delete set null,
   assigned_mechanic_email text,

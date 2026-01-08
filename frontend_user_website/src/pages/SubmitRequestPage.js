@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
@@ -8,42 +8,51 @@ import { dataService } from "../services/dataService";
 
 const CHENNAI = { lat: 13.0827, lng: 80.2707 };
 
-function isFiniteNumberString(value) {
-  if (value === "" || value === null || value === undefined) return false;
-  const n = Number(value);
-  return Number.isFinite(n);
-}
+/**
+ * Minimal client-side geocoding using OpenStreetMap Nominatim.
+ * - Uses `format=jsonv2` and `limit=1` for a single best match.
+ * - Requires a "User-Agent" on server-side, but browsers can't set it reliably; we add `accept-language`
+ *   and use a modest rate (one request per explicit user action).
+ */
+async function geocodeAddressNominatim(address, { signal } = {}) {
+  const q = address.trim();
+  if (!q) return { ok: false, message: "Address is required." };
 
-function validateLatLngStrings(latStr, lngStr) {
-  // Empty is treated as invalid, caller may show helper and/or fallback.
-  if (!isFiniteNumberString(latStr) || !isFiniteNumberString(lngStr)) {
-    return {
-      ok: false,
-      latError: "Enter a number (e.g., 13.0827).",
-      lngError: "Enter a number (e.g., 80.2707).",
-    };
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("q", q);
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("addressdetails", "1");
+
+  const resp = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      "Accept": "application/json",
+      // Best-effort; allowed by browsers, unlike User-Agent.
+      "Accept-Language": navigator.language || "en",
+    },
+    signal,
+  });
+
+  if (!resp.ok) {
+    throw new Error(`Geocoding failed (HTTP ${resp.status}). Please try again.`);
   }
 
-  const lat = Number(latStr);
-  const lng = Number(lngStr);
+  const data = await resp.json();
+  if (!Array.isArray(data) || data.length === 0) {
+    return { ok: false, message: "No matches found. Please refine the address." };
+  }
 
-  const latOk = lat >= -90 && lat <= 90;
-  const lngOk = lng >= -180 && lng <= 180;
+  const top = data[0];
+  const lat = Number(top?.lat);
+  const lng = Number(top?.lon);
+  const displayName = String(top?.display_name || q);
 
-  return {
-    ok: latOk && lngOk,
-    latError: latOk ? "" : "Latitude must be between -90 and 90.",
-    lngError: lngOk ? "" : "Longitude must be between -180 and 180.",
-  };
-}
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return { ok: false, message: "Found an address match, but coordinates were invalid." };
+  }
 
-function formatCoordsText(latStr, lngStr) {
-  // Copy-friendly, deterministic format. If inputs are invalid, use Chennai as safe fallback.
-  const lat = Number(latStr);
-  const lng = Number(lngStr);
-  const safeLat = Number.isFinite(lat) ? lat : CHENNAI.lat;
-  const safeLng = Number.isFinite(lng) ? lng : CHENNAI.lng;
-  return `${safeLat.toFixed(5)}, ${safeLng.toFixed(5)}`;
+  return { ok: true, lat, lng, displayName };
 }
 
 function isSecureEnoughForBrowserAPIs() {
@@ -74,10 +83,10 @@ function geolocationErrorToMessage(err) {
 
   // https://developer.mozilla.org/en-US/docs/Web/API/GeolocationPositionError/code
   if (err.code === 1) {
-    return "Location permission denied. Please allow location access in your browser settings, then try again (or enter coordinates manually).";
+    return "Location permission denied. Please allow location access in your browser settings, then try again.";
   }
   if (err.code === 2) {
-    return "Location unavailable. Please check GPS/network and try again, or enter coordinates manually.";
+    return "Location unavailable. Please check GPS/network and try again.";
   }
   if (err.code === 3) {
     return "Location request timed out. Try again (or move to an area with better GPS signal).";
@@ -121,87 +130,121 @@ function execCommandCopyFallback(text) {
 
 // PUBLIC_INTERFACE
 export function SubmitRequestPage({ user }) {
-  /** Form to submit a new breakdown request. */
+  /** Form to submit a new breakdown request with address-based geocoding (Nominatim). */
   const navigate = useNavigate();
+
   const [vehicle, setVehicle] = useState({ make: "", model: "", year: "", plate: "" });
   const [issueDescription, setIssueDescription] = useState("");
   const [contact, setContact] = useState({ name: "", phone: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  // Share Location UI feedback (kept separate from form validation error)
+  // Address + geocoding state
+  const [addressInput, setAddressInput] = useState("");
+  const [selectedAddress, setSelectedAddress] = useState("");
   const [geoBusy, setGeoBusy] = useState(false);
   const [geoStatus, setGeoStatus] = useState({ type: "", message: "" }); // success|error|info
 
-  // Controlled location inputs (strings so users can type partial values like "-" or "13.")
-  const [latInput, setLatInput] = useState(String(CHENNAI.lat));
-  const [lngInput, setLngInput] = useState(String(CHENNAI.lng));
-
-  // Debounced map location (numbers)
+  // Map location (numbers)
   const [mapLat, setMapLat] = useState(CHENNAI.lat);
   const [mapLng, setMapLng] = useState(CHENNAI.lng);
+
+  // Abort controller for geocoding requests (avoid race updates)
+  const geocodeAbortRef = useRef(null);
 
   const secureContextOk = useMemo(() => isSecureEnoughForBrowserAPIs(), []);
   const geoSupported = useMemo(() => "geolocation" in navigator, []);
   const canAttemptGeolocation = secureContextOk && geoSupported;
 
-  const locationValidation = useMemo(
-    () => validateLatLngStrings(latInput.trim(), lngInput.trim()),
-    [latInput, lngInput]
-  );
+  const validate = () => {
+    if (!vehicle.make.trim()) return "Vehicle make is required.";
+    if (!vehicle.model.trim()) return "Vehicle model is required.";
+    if (!issueDescription.trim()) return "Issue description is required.";
+    if (!contact.name.trim()) return "Contact name is required.";
+    if (!contact.phone.trim()) return "Contact phone is required.";
+    if (!selectedAddress.trim()) return "Please search and select an address.";
+    return "";
+  };
 
-  // Debounce updates to MapView to avoid excessive rerenders while typing.
-  // If invalid/empty values are present, fallback to Chennai.
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      if (locationValidation.ok) {
-        setMapLat(Number(latInput));
-        setMapLng(Number(lngInput));
-      } else {
-        setMapLat(CHENNAI.lat);
-        setMapLng(CHENNAI.lng);
-      }
-    }, 250);
-
-    return () => window.clearTimeout(t);
-  }, [latInput, lngInput, locationValidation.ok]);
-
-  const setCoordinatesFromNumbers = (lat, lng, { silent = false } = {}) => {
+  const setCoordinatesFromNumbers = (lat, lng, { address = "", silent = false } = {}) => {
     const nextLat = Number(lat);
     const nextLng = Number(lng);
 
-    // If values are invalid, keep Chennai defaults (as requested).
     const latOk = Number.isFinite(nextLat) && nextLat >= -90 && nextLat <= 90;
     const lngOk = Number.isFinite(nextLng) && nextLng >= -180 && nextLng <= 180;
 
     if (!latOk || !lngOk) {
-      setLatInput(String(CHENNAI.lat));
-      setLngInput(String(CHENNAI.lng));
+      setMapLat(CHENNAI.lat);
+      setMapLng(CHENNAI.lng);
       if (!silent) {
         setGeoStatus({
           type: "error",
-          message: "Received invalid coordinates from the browser. Falling back to Chennai defaults.",
+          message: "Received invalid coordinates. Falling back to Chennai defaults.",
         });
       }
       return;
     }
 
-    // Use a consistent precision for better UX + easy copy/paste
-    setLatInput(nextLat.toFixed(5));
-    setLngInput(nextLng.toFixed(5));
-    if (!silent) setGeoStatus({ type: "success", message: "Location detected and applied." });
+    setMapLat(nextLat);
+    setMapLng(nextLng);
+    if (address) setSelectedAddress(address);
+
+    if (!silent) {
+      setGeoStatus({ type: "success", message: "Location applied." });
+    }
+  };
+
+  // PUBLIC_INTERFACE
+  const findAddress = async () => {
+    /** Geocode the entered address via OpenStreetMap Nominatim and update map + selectedAddress. */
+    setGeoStatus({ type: "", message: "" });
+
+    const q = addressInput.trim();
+    if (!q) {
+      setGeoStatus({ type: "error", message: "Enter an address to search." });
+      return;
+    }
+
+    // Cancel any in-flight geocode
+    if (geocodeAbortRef.current) {
+      try {
+        geocodeAbortRef.current.abort();
+      } catch {
+        // no-op
+      }
+    }
+    const controller = new AbortController();
+    geocodeAbortRef.current = controller;
+
+    setGeoBusy(true);
+    try {
+      const result = await geocodeAddressNominatim(q, { signal: controller.signal });
+      if (!result.ok) {
+        setGeoStatus({ type: "error", message: result.message || "Could not geocode this address." });
+        return;
+      }
+
+      setCoordinatesFromNumbers(result.lat, result.lng, { address: result.displayName, silent: true });
+      setSelectedAddress(result.displayName);
+      setGeoStatus({ type: "success", message: "Address found and pinned on the map." });
+    } catch (e) {
+      if (e?.name === "AbortError") return;
+      setGeoStatus({ type: "error", message: e?.message || "Geocoding failed. Please try again." });
+    } finally {
+      setGeoBusy(false);
+    }
   };
 
   // PUBLIC_INTERFACE
   const useMyLocation = async () => {
-    /** Use browser Geolocation API to fill lat/lng inputs; keeps Chennai fallback on failure. */
+    /** Use browser Geolocation API and set a "GPS (lat,lng)" pseudo-address for persistence. */
     setGeoStatus({ type: "", message: "" });
 
     if (!secureContextOk) {
       setGeoStatus({
         type: "error",
         message:
-          "Use My Location requires a secure connection (HTTPS) or localhost. Please switch to HTTPS, or enter coordinates manually.",
+          "Use My Location requires a secure connection (HTTPS) or localhost. Please switch to HTTPS, or use address search.",
       });
       return;
     }
@@ -209,7 +252,7 @@ export function SubmitRequestPage({ user }) {
     if (!geoSupported) {
       setGeoStatus({
         type: "error",
-        message: "Geolocation is not supported in this browser. Please enter coordinates manually.",
+        message: "Geolocation is not supported in this browser. Please use address search.",
       });
       return;
     }
@@ -217,7 +260,6 @@ export function SubmitRequestPage({ user }) {
     setGeoBusy(true);
 
     try {
-      // If Permissions API is available, check for an explicit deny (helps provide clearer guidance).
       const perm = await queryGeoPermissionState();
       if (perm.supported && perm.state === "denied") {
         setGeoStatus({
@@ -239,9 +281,12 @@ export function SubmitRequestPage({ user }) {
       const lat = pos?.coords?.latitude;
       const lng = pos?.coords?.longitude;
 
-      setCoordinatesFromNumbers(lat, lng);
+      const gpsLabel =
+        Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))
+          ? `GPS (${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)})`
+          : "GPS (unknown)";
+      setCoordinatesFromNumbers(lat, lng, { address: gpsLabel });
     } catch (e) {
-      // Keep existing typed coordinates on failure.
       setGeoStatus({ type: "error", message: geolocationErrorToMessage(e) });
     } finally {
       setGeoBusy(false);
@@ -249,13 +294,14 @@ export function SubmitRequestPage({ user }) {
   };
 
   // PUBLIC_INTERFACE
-  const copyCoordinates = async () => {
-    /** Copy the current lat/lng to clipboard using Clipboard API, with execCommand fallback. */
+  const copyLocation = async () => {
+    /** Copy the current address + coordinates (when available) to clipboard. */
     setGeoStatus({ type: "", message: "" });
 
-    const text = formatCoordsText(latInput.trim(), lngInput.trim());
+    const safeAddr = selectedAddress?.trim();
+    const coords = `${mapLat.toFixed(5)}, ${mapLng.toFixed(5)}`;
+    const text = safeAddr ? `${safeAddr} — ${coords}` : coords;
 
-    // Try modern clipboard first (secure context), then fallback.
     try {
       if (secureContextOk) {
         const ok = await tryClipboardWriteText(text);
@@ -265,42 +311,36 @@ export function SubmitRequestPage({ user }) {
         }
       }
 
-      // Fallback path
       const fallbackOk = execCommandCopyFallback(text);
       if (fallbackOk) {
-        setGeoStatus({
-          type: "success",
-          message: `Copied (fallback): ${text}`,
-        });
+        setGeoStatus({ type: "success", message: `Copied (fallback): ${text}` });
         return;
       }
 
-      // If we get here, both approaches failed.
       setGeoStatus({
         type: "error",
-        message:
-          "Could not copy automatically (clipboard blocked). Please select the Latitude/Longitude fields and copy manually.",
+        message: "Could not copy automatically (clipboard blocked). Please copy manually.",
       });
     } catch (e) {
       setGeoStatus({
         type: "error",
-        message: e?.message
-          ? `Could not copy: ${e.message}`
-          : "Could not copy to clipboard. Please try again or copy manually.",
+        message: e?.message ? `Could not copy: ${e.message}` : "Could not copy to clipboard.",
       });
     }
   };
 
-  const validate = () => {
-    if (!vehicle.make.trim()) return "Vehicle make is required.";
-    if (!vehicle.model.trim()) return "Vehicle model is required.";
-    if (!issueDescription.trim()) return "Issue description is required.";
-    if (!contact.name.trim()) return "Contact name is required.";
-    if (!contact.phone.trim()) return "Contact phone is required.";
-    // Note: We intentionally do NOT block submission on invalid lat/lng in this MVP,
-    // because location is not persisted yet; the map falls back to Chennai.
-    return "";
-  };
+  // Cleanup any in-flight geocode when unmounting
+  useEffect(() => {
+    return () => {
+      if (geocodeAbortRef.current) {
+        try {
+          geocodeAbortRef.current.abort();
+        } catch {
+          // no-op
+        }
+      }
+    };
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -310,7 +350,17 @@ export function SubmitRequestPage({ user }) {
 
     setBusy(true);
     try {
-      const req = await dataService.createRequest({ user, vehicle, issueDescription, contact });
+      const req = await dataService.createRequest({
+        user,
+        vehicle,
+        issueDescription,
+        contact,
+        location: {
+          address: selectedAddress,
+          lat: mapLat,
+          lng: mapLng,
+        },
+      });
       navigate(`/requests/${req.id}`);
     } catch (err) {
       setError(err.message || "Could not submit request.");
@@ -326,7 +376,7 @@ export function SubmitRequestPage({ user }) {
         <p className="lead">Tell us what happened. A mechanic will review and accept it.</p>
       </div>
 
-      <Card title="Request details" subtitle="No maps/AI—manual details only.">
+      <Card title="Request details" subtitle="Address-based location (OpenStreetMap).">
         <form onSubmit={submit} className="form">
           <div className="grid2">
             <Input
@@ -372,10 +422,10 @@ export function SubmitRequestPage({ user }) {
             <div className="card-header">
               <div>
                 <h3 className="card-title" style={{ margin: 0 }}>
-                  Location (Lat/Lng)
+                  Location (Address)
                 </h3>
                 <p className="card-subtitle" style={{ margin: "6px 0 0" }}>
-                  Enter coordinates manually or use your current location. Invalid values fall back to Chennai defaults.
+                  Search by address (Nominatim) to pin a location. You can also use GPS as a fallback.
                 </p>
               </div>
             </div>
@@ -383,92 +433,74 @@ export function SubmitRequestPage({ user }) {
             <div className="card-body">
               {!secureContextOk ? (
                 <div className="alert alert-info" style={{ marginBottom: 10 }}>
-                  Location and clipboard features work best over <strong>HTTPS</strong> (or localhost). Current origin is not a secure context, so browser permissions may be blocked.
+                  GPS and clipboard features work best over <strong>HTTPS</strong> (or localhost). Current origin is not a secure context, so browser permissions may be blocked.
                 </div>
               ) : null}
 
-              {/* Share Location controls */}
-              <div
-                className="row"
-                style={{
-                  marginTop: 0,
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  gap: 10,
-                }}
-              >
-                <Button
-                  type="button"
-                  onClick={useMyLocation}
-                  disabled={!canAttemptGeolocation || geoBusy || busy}
-                  style={{ minWidth: 160 }}
-                  title={
-                    !canAttemptGeolocation
-                      ? !geoSupported
-                        ? "Geolocation is not supported by this browser."
-                        : "Requires HTTPS (or localhost) to request location."
-                      : ""
-                  }
-                >
-                  {geoBusy ? "Detecting…" : "Use My Location"}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={copyCoordinates}
+              <div className="grid2" style={{ alignItems: "end" }}>
+                <Input
+                  label="Address"
+                  name="address"
+                  value={addressInput}
+                  onChange={(e) => {
+                    setGeoStatus({ type: "", message: "" });
+                    setAddressInput(e.target.value);
+                  }}
+                  placeholder="Street, city, region…"
+                  required
                   disabled={geoBusy || busy}
-                  style={{ minWidth: 150 }}
-                  title={!secureContextOk ? "Clipboard API may be blocked on non-HTTPS. A fallback copy method will be attempted." : ""}
-                >
-                  Copy Coordinates
-                </Button>
+                  hint="Tip: include city/landmark for better results."
+                />
 
-                <div className="hint" style={{ margin: 0 }}>
-                  {geoSupported ? (secureContextOk ? "Uses browser GPS permissions." : "Needs HTTPS/localhost for GPS permissions.") : "Geolocation unavailable."}
+                <div style={{ display: "flex", gap: 10, alignItems: "end" }}>
+                  <Button type="button" onClick={findAddress} disabled={geoBusy || busy} style={{ minWidth: 160 }}>
+                    {geoBusy ? "Searching…" : "Find Address"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={useMyLocation}
+                    disabled={!canAttemptGeolocation || geoBusy || busy}
+                    style={{ minWidth: 160 }}
+                    title={
+                      !canAttemptGeolocation
+                        ? !geoSupported
+                          ? "Geolocation is not supported by this browser."
+                          : "Requires HTTPS (or localhost) to request location."
+                        : ""
+                    }
+                  >
+                    Use My Location
+                  </Button>
                 </div>
               </div>
 
               {geoStatus.message ? (
                 <div
-                  className={`alert ${geoStatus.type === "success" ? "alert-success" : geoStatus.type === "error" ? "alert-error" : "alert-info"}`}
+                  className={`alert ${
+                    geoStatus.type === "success" ? "alert-success" : geoStatus.type === "error" ? "alert-error" : "alert-info"
+                  }`}
                   style={{ marginTop: 10 }}
                 >
                   {geoStatus.message}
                 </div>
               ) : null}
 
-              <div className="grid2" style={{ marginTop: 10 }}>
-                <Input
-                  label="Latitude"
-                  name="latitude"
-                  value={latInput}
-                  onChange={(e) => {
-                    setGeoStatus({ type: "", message: "" });
-                    setLatInput(e.target.value);
-                  }}
-                  placeholder="13.0827"
-                  hint="Range: -90 to 90"
-                  error={latInput.trim() && locationValidation.latError ? locationValidation.latError : ""}
-                  disabled={geoBusy}
-                />
-                <Input
-                  label="Longitude"
-                  name="longitude"
-                  value={lngInput}
-                  onChange={(e) => {
-                    setGeoStatus({ type: "", message: "" });
-                    setLngInput(e.target.value);
-                  }}
-                  placeholder="80.2707"
-                  hint="Range: -180 to 180"
-                  error={lngInput.trim() && locationValidation.lngError ? locationValidation.lngError : ""}
-                  disabled={geoBusy}
-                />
+              <div className="row" style={{ marginTop: 10, justifyContent: "flex-start" }}>
+                <Button type="button" variant="ghost" onClick={copyLocation} disabled={geoBusy || busy}>
+                  Copy Location
+                </Button>
+
+                <div className="hint" style={{ margin: 0 }}>
+                  Selected:{" "}
+                  <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                    {selectedAddress || "—"}
+                  </span>
+                </div>
               </div>
 
-              <div className="hint" style={{ marginTop: 6 }}>
-                Map updates live (debounced). Current map target:{" "}
+              <div className="hint" style={{ marginTop: 8 }}>
+                Map target:{" "}
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
                   {mapLat.toFixed(5)}, {mapLng.toFixed(5)}
                 </span>
@@ -507,8 +539,8 @@ export function SubmitRequestPage({ user }) {
             />
           </div>
 
-          {/* OpenStreetMap preview (bound to the Lat/Lng inputs). */}
-          <MapView lat={mapLat} lng={mapLng} />
+          {/* OpenStreetMap preview (bound to address/lat/lng). */}
+          <MapView lat={mapLat} lng={mapLng} address={selectedAddress} />
 
           {error ? <div className="alert alert-error">{error}</div> : null}
 

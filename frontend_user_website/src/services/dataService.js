@@ -139,10 +139,13 @@ async function supaUserToAppUser(supaUser) {
 /*
   FIELD MAPPING NOTES (MUST BE IDENTICAL ACROSS ALL 3 FRONTENDS/SERVICES)
 
-  UI form fields (local): {vehicle: {make, model, year, plate}, contact: {name, phone}, issueDescription}
+  UI form fields (local): {vehicle: {make, model, year, plate}, contact: {name, phone}, issueDescription, location: {address, lat, lng}}
   Supabase DB columns (requests):
     - vehicle (jsonb: {make, model, year, plate}),
     - contact (jsonb: {name, phone}),
+    - address (text, optional),
+    - lat (double precision / numeric, optional),
+    - lon (double precision / numeric, optional),
     - user_email,
     - assigned_mechanic_email,
     - notes (jsonb array),
@@ -154,6 +157,7 @@ async function supaUserToAppUser(supaUser) {
 
   - When reading, always reconstruct {vehicle} and {contact} if only primitives are present or if data is stringified.
   - When writing, always persist {vehicle} and {contact} as jsonb to Supabase.
+  - Location is address-based (Nominatim). Persist `address`, `lat`, and `lon` when available.
   - If future backends provide only separate fields, include non-breaking fallback to recompose.
   - "vehicle" UI display: "${vehicle.make} ${vehicle.model} ${vehicle.year}" (never expect a single vehiclestring column unless legacy).
   - "contact" UI display: "${contact.name} (${contact.phone})"
@@ -336,6 +340,9 @@ export const dataService = {
           vehicle,
           issueDescription: r.issue_description,
           contact,
+          address: r.address || "",
+          lat: typeof r.lat === "number" ? r.lat : r.lat ? Number(r.lat) : null,
+          lon: typeof r.lon === "number" ? r.lon : r.lon ? Number(r.lon) : null,
           status: normalizeStatus(r.status),
           assignedMechanicId: r.assigned_mechanic_id,
           assignedMechanicEmail: r.assigned_mechanic_email,
@@ -355,7 +362,7 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
-  async createRequest({ user, vehicle, issueDescription, contact }) {
+  async createRequest({ user, vehicle, issueDescription, contact, location }) {
     ensureSeedData();
     const supa = getSupabase();
     const nowIso = new Date().toISOString();
@@ -371,6 +378,11 @@ export const dataService = {
       phone: contact?.phone || "",
     };
 
+    // Location (address-based). Store as primitives to align across frontends.
+    const safeAddress = typeof location?.address === "string" ? location.address : "";
+    const safeLat = Number.isFinite(Number(location?.lat)) ? Number(location.lat) : null;
+    const safeLon = Number.isFinite(Number(location?.lng)) ? Number(location.lng) : null;
+
     // Prep mock request for localStorage mode
     const request = {
       id: uid("req"),
@@ -380,6 +392,9 @@ export const dataService = {
       vehicle: safeVehicle, // only make/model is stored for "vehicle"
       issueDescription,
       contact: safeContact,
+      address: safeAddress,
+      lat: safeLat,
+      lon: safeLon,
       status: "Submitted",
       assignedMechanicId: null,
       assignedMechanicEmail: null,
@@ -387,7 +402,8 @@ export const dataService = {
     };
 
     if (supa) {
-      // Prepare payload for Supabase: vehicle={make,model}, status="open", omit id, only valid/null UUIDs, no custom fields.
+      // Prepare payload for Supabase: vehicle={make,model}, status="open", omit id.
+      // Persist address/lat/lon when present.
       const insertPayload = {
         created_at: nowIso,
         user_id: user.id,
@@ -395,11 +411,15 @@ export const dataService = {
         vehicle: safeVehicle,
         issue_description: issueDescription,
         contact: safeContact,
+        address: safeAddress || null,
+        lat: safeLat,
+        lon: safeLon,
         status: "open", // always open on create
         assigned_mechanic_id: null,
         assigned_mechanic_email: null,
         notes: [],
       };
+
       // Use .select() to get server-inserted row for ID
       const { data, error } = await supa.from("requests").insert(insertPayload).select().maybeSingle();
 
@@ -417,6 +437,7 @@ export const dataService = {
         make: typeof vehicleObj.make === "string" ? vehicleObj.make : "",
         model: typeof vehicleObj.model === "string" ? vehicleObj.model : "",
       };
+
       let contactObj = data.contact;
       if (!contactObj || typeof contactObj !== "object") {
         contactObj = {};
@@ -432,6 +453,9 @@ export const dataService = {
         vehicle: vehicleObj,
         issueDescription: data.issue_description,
         contact: contactObj,
+        address: data.address || "",
+        lat: typeof data.lat === "number" ? data.lat : data.lat ? Number(data.lat) : null,
+        lon: typeof data.lon === "number" ? data.lon : data.lon ? Number(data.lon) : null,
         status: data.status,
         assignedMechanicId: data.assigned_mechanic_id,
         assignedMechanicEmail: data.assigned_mechanic_email,

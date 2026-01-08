@@ -43,7 +43,7 @@ function sanitizeLatLng(lat, lng) {
 }
 
 // PUBLIC_INTERFACE
-export default function MapView({ lat, lng, zoom = 13, className = "" }) {
+export default function MapView({ lat, lng, address = "", zoom = 13, className = "" }) {
   /**
    * Hardened OpenStreetMap (Leaflet) map for breakdown location.
    * - Defers map init until Leaflet is loaded and canvas node is in the DOM.
@@ -223,7 +223,14 @@ export default function MapView({ lat, lng, zoom = 13, className = "" }) {
         <div>
           <div className="rrqa-map-title">Breakdown location</div>
           <div className="rrqa-map-subtitle">
-            Map preview (OpenStreetMap). Coordinates:{" "}
+            Map preview (OpenStreetMap).
+            {address ? (
+              <>
+                {" "}
+                Address: <span className="rrqa-map-mono">{address}</span> •
+              </>
+            ) : null}{" "}
+            Coordinates:{" "}
             <span className="rrqa-map-mono">
               {safeLat.toFixed(5)}, {safeLng.toFixed(5)}
             </span>
