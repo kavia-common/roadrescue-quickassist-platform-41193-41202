@@ -17,81 +17,33 @@ Each frontend reads:
 
 If either is missing/empty, the app automatically falls back to **mock mode**.
 
-## Database schema (implemented)
+## Current Supabase state (verified)
 
-### `public.profiles`
+Tables currently present in `public` schema:
 
-Used for roles and mechanic profile data.
+- `profiles`
+- `requests`
+- `assignments`
+- `fees`
 
-Columns:
+## IMPORTANT: Backend requirements attachment missing (BLOCKER)
 
-- `id` (uuid, PK) — references `auth.users(id)` (cascade delete)
-- `role` (text) — defaults to `user` (used for RLS role checks)
-  - expected values in this MVP: `user`, `mechanic`, `approved_mechanic`, `admin`
-- `display_name` (text, nullable)
-- `service_area` (text, nullable)
-- (may exist from earlier iterations): `full_name`, `created_at`
+The work item requires implementing a production-ready Supabase backend (schema, RLS, triggers, indexes) **per the authoritative `user_input_ref` attachment**.
 
-### `public.requests`
+However, the attachment file path provided to this agent did not exist in the runtime filesystem (file-not-found). As a result, this agent could not safely apply the required DDL/RLS/triggers/indexes because the authoritative specification could not be read.
 
-Stores breakdown requests and assignment/status.
+### What to do next (for the next agent)
 
-Required fields for this subtask (now present):
-
-- `user_id` (uuid, NOT NULL) — references `auth.users(id)` (cascade delete)
-- `status` (text, defaults to `open`)
-- `lat` (double precision, nullable)
-- `lon` (double precision, nullable)
-- `address` (text, nullable)
-- `notes` (text, nullable)
-- `created_at` (timestamptz, defaults to now())
-
-Other columns may already exist (vehicle fields, contacts, assignment fields, etc.) and are left intact.
-
-### Automatic `updated_at`
-
-A trigger updates `requests.updated_at` on every update (if `updated_at` column exists).
-
-## RLS (Row Level Security) (implemented)
-
-Because the JS code reads/writes directly from the browser, RLS must allow the required operations.
-
-### Helper functions (used by policies)
-
-- `public.is_admin()` returns true if `profiles.role = 'admin'` for `auth.uid()`
-- `public.is_mechanic()` returns true if role is in `('mechanic','approved_mechanic','admin')`
-
-### `public.profiles` policies
-
-Enabled: `ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;`
-
-Policies:
-
-- **Self read**: authenticated users can `SELECT` their own profile row
-- **Self insert**: authenticated users can `INSERT` their own profile row (id must equal `auth.uid()`)
-- **Self update**: authenticated users can `UPDATE` their own profile row
-- **Admin read**: admins can `SELECT` all profiles
-- **Admin update**: admins can `UPDATE` all profiles
-
-### `public.requests` policies
-
-Enabled: `ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;`
-
-Policies:
-
-- **User insert**: authenticated users can `INSERT` requests only when `user_id = auth.uid()`
-- **User read**: authenticated users can `SELECT` their own requests (`user_id = auth.uid()`)
-- **User update**: authenticated users can `UPDATE` their own requests (`user_id = auth.uid()`)
-
-Mechanic/admin access for the mechanic portal/admin panel:
-
-- **Mechanic read**: mechanics can `SELECT` requests
-- **Mechanic update**: mechanics can `UPDATE` requests that are either:
-  - unassigned (`assigned_mechanic_id is null`) to allow accepting, OR
-  - assigned to them (`assigned_mechanic_id = auth.uid()`)
-
-- **Admin read**: admins can `SELECT` all requests
-- **Admin update**: admins can `UPDATE` all requests
+1. Re-attach the requirements document as `user_input_ref` (or provide a correct, existing file path).
+2. Then implement backend in this strict order:
+   - `SupabaseTool_list_tables`
+   - `SupabaseTool_create_table` (for any missing tables)
+   - `SupabaseTool_run_sql` (RLS policies, triggers, indexes, helper functions)
+3. Update this `assets/supabase.md` with:
+   - Final schema (tables/columns + relationships)
+   - RLS policies per role (`user`, `mechanic`, `admin`)
+   - Triggers (e.g., `updated_at`, automation)
+   - Indexes and rationale (query patterns)
 
 ## Supabase Dashboard configuration (required)
 
