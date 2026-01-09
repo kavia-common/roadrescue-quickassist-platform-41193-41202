@@ -247,12 +247,43 @@ export const dataService = {
   async getCurrentUser() {
     ensureSeedData();
     const supa = getSupabase();
+
+    // IMPORTANT:
+    // In some environments the network call behind supabase.auth.getUser() can hang indefinitely
+    // (e.g. bad URL, blocked network, captive portal). If that happens, the app boot can stall.
+    // We enforce a small timeout and treat it as "logged out" so the app can still render.
+    const withTimeout = async (promise, ms, label) => {
+      let t;
+      try {
+        return await Promise.race([
+          promise,
+          new Promise((_, reject) => {
+            t = window.setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+          }),
+        ]);
+      } finally {
+        if (t) window.clearTimeout(t);
+      }
+    };
+
     if (supa) {
-      const { data } = await supa.auth.getUser();
-      const user = data?.user;
-      if (!user) return null;
-      const roleInfo = await supaGetUserRole(supa, user.id, user.email);
-      return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
+      try {
+        const { data } = await withTimeout(supa.auth.getUser(), 3500, "Supabase getUser");
+        const user = data?.user;
+        if (!user) return null;
+
+        // Role lookup should also be best-effort; if it hangs/fails, still return basic identity.
+        try {
+          const roleInfo = await withTimeout(supaGetUserRole(supa, user.id, user.email), 3500, "Supabase role lookup");
+          return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
+        } catch {
+          return { id: user.id, email: user.email, role: "user", approved: true };
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("[dataService.getCurrentUser] Supabase unreachable; falling back to logged-out mode:", e?.message || e);
+        return null;
+      }
     }
 
     const session = getLocalSession();
