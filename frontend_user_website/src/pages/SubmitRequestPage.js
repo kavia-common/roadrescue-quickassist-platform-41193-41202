@@ -5,6 +5,7 @@ import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { MapView } from "../components/MapView";
 import { dataService } from "../services/dataService";
+import { geocodeAddress } from "../services/geocodingService";
 
 function parseNumberOrNull(v) {
   const t = String(v ?? "").trim();
@@ -28,7 +29,9 @@ export function SubmitRequestPage({ user }) {
   const [lngText, setLngText] = useState("");
 
   const [busy, setBusy] = useState(false);
+  const [findBusy, setFindBusy] = useState(false);
   const [error, setError] = useState("");
+  const [locationStatus, setLocationStatus] = useState({ type: "", message: "" }); // type: info|error
 
   const parsedLat = useMemo(() => parseNumberOrNull(latText), [latText]);
   const parsedLng = useMemo(() => parseNumberOrNull(lngText), [lngText]);
@@ -54,6 +57,35 @@ export function SubmitRequestPage({ user }) {
       if (parsedLng < -180 || parsedLng > 180) return "Longitude must be between -180 and 180.";
     }
     return "";
+  };
+
+  const onFindLocation = async () => {
+    setError("");
+    setLocationStatus({ type: "", message: "" });
+
+    const q = locationText.trim();
+    if (!q) {
+      setLocationStatus({ type: "error", message: "Enter an address/landmark first, then click “Find location”." });
+      return;
+    }
+
+    setFindBusy(true);
+    try {
+      const result = await geocodeAddress(q, { countryCodes: "in", limit: 1 });
+
+      // Populate fields that drive the map marker/center.
+      setLatText(String(result.lat));
+      setLngText(String(result.lng));
+
+      // Replace the location text with Nominatim’s display name to improve clarity for the user.
+      setLocationText(result.displayName);
+
+      setLocationStatus({ type: "info", message: `Found: ${result.displayName}` });
+    } catch (e) {
+      setLocationStatus({ type: "error", message: e?.message || "Could not find that location." });
+    } finally {
+      setFindBusy(false);
+    }
   };
 
   const submit = async (e) => {
@@ -156,11 +188,28 @@ export function SubmitRequestPage({ user }) {
               label="Location / landmark"
               name="locationText"
               value={locationText}
-              onChange={(e) => setLocationText(e.target.value)}
+              onChange={(e) => {
+                setLocationText(e.target.value);
+                // Clear any prior “Found” message when the user edits the query.
+                if (locationStatus.message) setLocationStatus({ type: "", message: "" });
+              }}
               placeholder="e.g., Near Anna Nagar Tower Park"
-              hint="Optional: add a short landmark or area name."
+              hint="Enter an address/landmark and click “Find location” to auto-fill coordinates."
+              disabled={findBusy}
             />
-            <div />
+
+            <div style={{ display: "flex", alignItems: "end" }}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onFindLocation}
+                disabled={findBusy || !locationText.trim()}
+                style={{ width: "100%" }}
+              >
+                {findBusy ? "Finding…" : "Find location"}
+              </Button>
+            </div>
+
             <Input
               label="Latitude"
               name="latitude"
@@ -179,12 +228,11 @@ export function SubmitRequestPage({ user }) {
             />
           </div>
 
-          <MapView
-            center={marker || undefined}
-            marker={marker || undefined}
-            height={280}
-            ariaLabel="Selected location map"
-          />
+          {locationStatus.message ? (
+            <div className={`alert ${locationStatus.type === "error" ? "alert-error" : ""}`}>{locationStatus.message}</div>
+          ) : null}
+
+          <MapView center={marker || undefined} marker={marker || undefined} height={280} ariaLabel="Selected location map" />
 
           {locationText.trim() ? (
             <div className="hint" style={{ marginTop: -6 }}>
