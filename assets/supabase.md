@@ -44,6 +44,7 @@ Verified tables now present:
 - `mechanic_profiles`
 - `requests`
 - `request_notes`
+- `_schema_migrations` (lightweight internal table used to record schema/index migrations applied by automation)
 - (pre-existing: `assignments`, `fees`)
 
 ### `profiles`
@@ -85,13 +86,22 @@ Ensured columns:
 - `updated_at timestamptz not null default now()`
 
 Additional analytics/search fields (added via 2026-01-09 change):
-- `vehicle_make text`
-- `vehicle_model text`
-- `vehicle_plate text`
-- `issue_description text`
-- `address text`
-- `user_email text`
-- `assigned_mechanic_email text`
+- `requester_email text`
+- `mechanic_id uuid`
+- `mechanic_email text`
+- `customer_name text`
+- `customer_phone text`
+- `customer_email text`
+- `service_type text`
+- `city text`
+- `state text`
+- `postal_code text`
+- `cancelled_reason text`
+- `last_status_change_at timestamptz`
+- (already present) `user_email text`
+- (already present) `assigned_mechanic_email text`
+- (already present) `vehicle_plate text`
+- (already present) `issue_description text`
 
 ### `request_notes`
 Notes attached to a request (audit + communication).
@@ -131,10 +141,23 @@ Trigger:
 
 ## Indexes
 
+Baseline indexes:
 - `profiles(role)`, `profiles(approved)`
 - `requests(requester_id)`, `requests(assigned_mechanic_id)`, `requests(status)`, `requests(submitted_at desc)`
 - `requests(vehicle_plate)`, `requests(vehicle_make)`, `requests(vehicle_model)`, `requests(created_at)`, `requests(status)`
 - `request_notes(request_id, created_at desc)`, `request_notes(author_id)`
+
+Added for performance (2026-01-09):
+- `requests(user_id, created_at desc)`
+- `requests(status, created_at desc)`
+- `requests(assigned_mechanic_id, status)`
+- `requests(priority, created_at desc)`
+- `requests(created_at desc)`, `requests(updated_at desc)`
+- `requests(submitted_at desc)`, `requests(accepted_at desc)`, `requests(completed_at desc)`
+- `requests(user_email)`, `requests(contact_phone)`, `requests(vehicle_plate)`
+- GIN text search:
+  - `to_tsvector('english', coalesce(location_text,''))`
+  - `to_tsvector('english', coalesce(issue_description,''))`
 
 ## RLS policies (summary)
 
