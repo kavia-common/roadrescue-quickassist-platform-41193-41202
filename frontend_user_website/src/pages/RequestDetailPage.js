@@ -13,7 +13,8 @@ export function RequestDetailPage({ user }) {
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+
+    const load = async () => {
       try {
         const r = await dataService.getRequestById(requestId);
         if (!r) throw new Error("Request not found.");
@@ -22,9 +23,17 @@ export function RequestDetailPage({ user }) {
       } catch (e) {
         if (mounted) setError(e.message || "Could not load request.");
       }
-    })();
+    };
+
+    load();
+
+    const unsub = dataService.subscribeToRequestsChanged(() => {
+      load();
+    });
+
     return () => {
       mounted = false;
+      unsub?.();
     };
   }, [requestId, user.id]);
 

@@ -162,9 +162,58 @@ async function supaUserToAppUser(supaUser) {
   These rules ensure consistent field display/persistence across User Website, Mechanic Portal, and Admin Panel.
 
 */
+const REQUESTS_CHANGED_EVENT = "requests-changed";
+
+function emitRequestsChanged(detail) {
+  try {
+    window.dispatchEvent(new CustomEvent(REQUESTS_CHANGED_EVENT, { detail }));
+  } catch {
+    // ignore
+  }
+}
+
 // PUBLIC_INTERFACE
 export const dataService = {
   /** Data access facade: uses Supabase when configured; otherwise localStorage mock. */
+
+  // PUBLIC_INTERFACE
+  subscribeToRequestsChanged(handler) {
+    /**
+     * Subscribe to "requests changed" signals.
+     *
+     * - In Supabase mode, also listens to Supabase realtime updates on `public.requests`
+     *   (when realtime is enabled on the project).
+     * - In mock mode, only listens to the local event.
+     *
+     * Returns an unsubscribe function.
+     */
+    const wrapped = (e) => handler?.(e?.detail);
+    window.addEventListener(REQUESTS_CHANGED_EVENT, wrapped);
+
+    const supa = getSupabase();
+    let channel = null;
+    if (supa) {
+      try {
+        channel = supa
+          .channel("rrqa-requests")
+          .on("postgres_changes", { event: "*", schema: "public", table: "requests" }, (payload) => {
+            emitRequestsChanged({ source: "supabase-realtime", payload });
+          })
+          .subscribe();
+      } catch {
+        // ignore; realtime may not be enabled
+      }
+    }
+
+    return () => {
+      window.removeEventListener(REQUESTS_CHANGED_EVENT, wrapped);
+      try {
+        if (channel && supa) supa.removeChannel(channel);
+      } catch {
+        // ignore
+      }
+    };
+  },
 
   // PUBLIC_INTERFACE
   async register(email, password) {
@@ -421,6 +470,8 @@ export const dataService = {
       // Prepare payload for Supabase: vehicle={make,model}, status="open", omit id, only valid/null UUIDs, no custom fields.
       const insertPayload = {
         created_at: nowIso,
+        // best-effort updated_at (if column exists)
+        updated_at: nowIso,
         user_id: user.id,
         user_email: user.email,
         vehicle: safeVehicle,
@@ -455,7 +506,7 @@ export const dataService = {
         if (data.contact_phone) contactObj.phone = data.contact_phone;
       }
 
-      return {
+      const created = {
         id: data.id,
         createdAt: data.created_at,
         userId: data.user_id,
@@ -468,11 +519,15 @@ export const dataService = {
         assignedMechanicEmail: data.assigned_mechanic_email,
         notes: data.notes || [],
       };
+
+      emitRequestsChanged({ type: "created", requestId: created.id });
+      return created;
     }
 
     // In mock mode, assign custom string ID.
     const all = getLocalRequests();
     setLocalRequests([request, ...all]);
+    emitRequestsChanged({ type: "created", requestId: request.id });
     return request;
   },
 

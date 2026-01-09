@@ -17,16 +17,26 @@ export function MyRequestsPage({ user }) {
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+
+    const fetchRows = async () => {
       try {
         const list = await dataService.listRequests({ forUserId: user.id });
         if (mounted) setRows(list);
       } catch (e) {
         if (mounted) setError(e.message || "Could not load requests.");
       }
-    })();
+    };
+
+    fetchRows();
+
+    // Cross-portal refresh: listen for request mutations (Supabase realtime when available).
+    const unsub = dataService.subscribeToRequestsChanged(() => {
+      fetchRows();
+    });
+
     return () => {
       mounted = false;
+      unsub?.();
     };
   }, [user.id]);
 
