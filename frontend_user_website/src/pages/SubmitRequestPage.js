@@ -131,7 +131,18 @@ export function SubmitRequestPage({ user }) {
       // This change adds a UI map preview for the request flow and mechanic detail view.
 
       profiler.mark("before_create_request");
-      const req = await dataService.createRequest({ user, vehicle, issueDescription, contact });
+      const req = await dataService.createRequest({
+        user,
+        vehicle,
+        issueDescription,
+        contact,
+        // Persist the full payload: user-entered/display address text + lat/lon.
+        // Address text may be a landmark or Nominatim display name.
+        address: locationText.trim() || null,
+        latitude: parsedLat,
+        longitude: parsedLng,
+        profiler,
+      });
       profiler.mark("after_create_request");
       profiler.measure("submit:db_write(createRequest)", "before_create_request", "after_create_request");
 

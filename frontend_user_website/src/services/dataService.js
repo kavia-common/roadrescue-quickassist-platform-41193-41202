@@ -355,15 +355,18 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
-  async createRequest({ user, vehicle, issueDescription, contact, profiler } = {}) {
+  async createRequest({ user, vehicle, issueDescription, contact, address, latitude, longitude, profiler } = {}) {
     /**
-     * Create a new request.
+     * Create a new request (Supabase mode persists the full submit payload).
      *
      * @param {Object} params
      * @param {Object} params.user
      * @param {Object} params.vehicle
      * @param {string} params.issueDescription
      * @param {Object} params.contact
+     * @param {string|null} [params.address] - Free-form address/landmark text.
+     * @param {number|null} [params.latitude]
+     * @param {number|null} [params.longitude]
      * @param {Object} [params.profiler] - Optional profiler instance to measure create steps.
      */
     ensureSeedData();
@@ -372,16 +375,34 @@ export const dataService = {
 
     profiler?.mark("createRequest:start");
 
-    // ENFORCED: Write vehicle as {make, model} ONLY for every create (ignore year/plate).
+    // Basic defensive validation (UI should validate too; this prevents silent bad writes).
+    if (!user?.id) throw new Error("You must be logged in to submit a request.");
+    if (!user?.email) throw new Error("Missing user email.");
+    if (!issueDescription || !String(issueDescription).trim()) throw new Error("Issue description is required.");
+
+    const a = address == null ? null : String(address).trim();
+    const lat = typeof latitude === "number" && Number.isFinite(latitude) ? latitude : null;
+    const lng = typeof longitude === "number" && Number.isFinite(longitude) ? longitude : null;
+
+    // Coordinates: if one is set, require both.
+    if ((lat != null && lng == null) || (lat == null && lng != null)) {
+      throw new Error("Both latitude and longitude are required when providing coordinates.");
+    }
+
+    // ENFORCED: keep legacy UI normalization (vehicle stored as make/model for current list/detail UI),
+    // BUT also persist full vehicle info to dedicated DB columns when available (vehicle_year/vehicle_plate).
     profiler?.mark("createRequest:before_payload_prep");
-    const safeVehicle = {
-      make: vehicle && typeof vehicle.make === "string" ? vehicle.make : "",
-      model: vehicle && typeof vehicle.model === "string" ? vehicle.model : "",
-    };
-    // Contact full, for UI/possible future
+    const make = vehicle && typeof vehicle.make === "string" ? vehicle.make.trim() : "";
+    const model = vehicle && typeof vehicle.model === "string" ? vehicle.model.trim() : "";
+    const yearRaw = vehicle && typeof vehicle.year === "string" ? vehicle.year.trim() : String(vehicle?.year ?? "").trim();
+    const plate = vehicle && typeof vehicle.plate === "string" ? vehicle.plate.trim() : "";
+
+    const yearInt = yearRaw ? Number.parseInt(yearRaw, 10) : null;
+    const safeVehicle = { make, model }; // what the UI expects downstream
+
     const safeContact = {
-      name: contact?.name || "",
-      phone: contact?.phone || "",
+      name: String(contact?.name || "").trim(),
+      phone: String(contact?.phone || "").trim(),
     };
 
     // Prep mock request for localStorage mode
@@ -390,9 +411,13 @@ export const dataService = {
       createdAt: nowIso,
       userId: user.id,
       userEmail: user.email,
-      vehicle: safeVehicle, // only make/model is stored for "vehicle"
-      issueDescription,
+      vehicle: safeVehicle,
+      issueDescription: String(issueDescription),
       contact: safeContact,
+      // Persisted in Supabase, but also keep in mock object for future UI extensions.
+      address: a,
+      latitude: lat,
+      longitude: lng,
       status: "Submitted",
       assignedMechanicId: null,
       assignedMechanicEmail: null,
@@ -402,31 +427,54 @@ export const dataService = {
     profiler?.measure("createRequest:payload_prep", "createRequest:before_payload_prep", "createRequest:after_payload_prep");
 
     if (supa) {
-      // Prepare payload for Supabase: vehicle={make,model}, status="open", omit id, only valid/null UUIDs, no custom fields.
+      // Insert into Supabase `requests` with full payload.
+      // DB schema (per requirements) expects:
+      // user_id, status, issue_description, vehicle_make/model/year/plate, address, latitude, longitude.
       const insertPayload = {
         created_at: nowIso,
         user_id: user.id,
+        status: "open",
+        issue_description: String(issueDescription),
+
+        vehicle_make: make || null,
+        vehicle_model: model || null,
+        vehicle_year: Number.isFinite(yearInt) ? yearInt : null,
+        vehicle_plate: plate || null,
+
+        address: a,
+        latitude: lat,
+        longitude: lng,
+
+        // Keep these compatible with existing UI + older migrations in this repo.
         user_email: user.email,
         vehicle: safeVehicle,
-        issue_description: issueDescription,
         contact: safeContact,
-        status: "open", // always open on create
         assigned_mechanic_id: null,
         assigned_mechanic_email: null,
         notes: [],
       };
 
       profiler?.mark("createRequest:supabase_insert_start");
-      // Use .select() to get server-inserted row for ID
-      const { data, error } = await supa.from("requests").insert(insertPayload).select().maybeSingle();
+      const { data, error } = await supa.from("requests").insert(insertPayload).select("*").maybeSingle();
       profiler?.mark("createRequest:supabase_insert_end");
       profiler?.measure("createRequest:supabase_insert", "createRequest:supabase_insert_start", "createRequest:supabase_insert_end");
 
-      if (error) throw new Error(error.message);
-      if (!data) throw new Error("Failed to insert request.");
+      if (error) {
+        // Provide a more actionable error message for common classes of failures.
+        const msg = String(error.message || "Supabase insert failed.");
+        if (/row level security|violates row-level security/i.test(msg)) {
+          throw new Error("Permission denied while submitting request (RLS). Please log in again and retry.");
+        }
+        if (/invalid input syntax for type uuid/i.test(msg)) {
+          throw new Error("Invalid user session. Please log out and log back in, then retry.");
+        }
+        throw new Error(msg);
+      }
+      if (!data) throw new Error("Failed to insert request (no data returned).");
 
+      // Normalize result for UI (keeps existing screens stable).
       profiler?.mark("createRequest:normalize_start");
-      // Always normalize vehicle to {make,model} in UI state
+
       let vehicleObj = data.vehicle;
       if (!vehicleObj || typeof vehicleObj !== "object") {
         vehicleObj = {};
@@ -437,12 +485,14 @@ export const dataService = {
         make: typeof vehicleObj.make === "string" ? vehicleObj.make : "",
         model: typeof vehicleObj.model === "string" ? vehicleObj.model : "",
       };
+
       let contactObj = data.contact;
       if (!contactObj || typeof contactObj !== "object") {
         contactObj = {};
         if (data.contact_name) contactObj.name = data.contact_name;
         if (data.contact_phone) contactObj.phone = data.contact_phone;
       }
+
       profiler?.mark("createRequest:normalize_end");
       profiler?.measure("createRequest:normalize_result", "createRequest:normalize_start", "createRequest:normalize_end");
 
@@ -452,7 +502,7 @@ export const dataService = {
         id: data.id,
         createdAt: data.created_at,
         userId: data.user_id,
-        userEmail: data.user_email,
+        userEmail: data.user_email || user.email,
         vehicle: vehicleObj,
         issueDescription: data.issue_description,
         contact: contactObj,
@@ -460,6 +510,9 @@ export const dataService = {
         assignedMechanicId: data.assigned_mechanic_id,
         assignedMechanicEmail: data.assigned_mechanic_email,
         notes: data.notes || [],
+        address: data.address ?? a,
+        latitude: data.latitude ?? lat,
+        longitude: data.longitude ?? lng,
       };
     }
 
