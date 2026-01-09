@@ -161,26 +161,32 @@ Added for performance (2026-01-09):
 
 ## RLS policies (summary)
 
-### `profiles` (FIXED POLICY SET)
+### `profiles` (JWT-admin, non-recursive FIXED POLICY SET)
 Effective behavior:
 
 - **SELECT**
   - authenticated user can select their own profile (`auth.uid() = id`)
-  - admin can select any profile (via `public.is_admin()`)
+  - admin can select any profile (**JWT-based check only** via `public.is_admin()`)
 
 - **INSERT**
   - authenticated user can insert their own profile (`auth.uid() = id`)
-  - admin can insert any profile
+  - admin can insert any profile (**JWT-based check only**)
 
 - **UPDATE**
   - authenticated user can update only their own profile (`auth.uid() = id`)
-  - admin can update any profile
+  - admin can update any profile (**JWT-based check only**)
+
+Why this matters (production safety):
+
+- The previous “admin” RLS pattern commonly used `exists(select 1 from public.profiles ...)` inside a `profiles` policy, which causes **infinite recursion** during RLS evaluation.
+- This project’s admin access is now determined **only** by the Auth JWT claim: `auth.jwt() -> 'app_metadata' ->> 'role' = 'admin'`.
+- This eliminates any policy-time reads of `public.profiles` from within `public.profiles` RLS (no recursive queries).
 
 Compliance notes (sample-compliant / audit-friendly):
 
 - Policies are **explicitly separated** by actor (self vs admin) to make intent clear and to avoid ambiguous OR-conditions.
-- Admin access is mediated only by JWT `app_metadata.role='admin'` (via `public.is_admin()`).
-- Self access is strictly bound to `profiles.id = auth.uid()` (no additional joins, no cross-user access).
+- Admin access is mediated only by JWT `app_metadata.role='admin'` (via `public.is_admin()`), not by querying tables.
+- Self access is strictly bound to `profiles.id = auth.uid()` (no joins, no cross-user access).
 - If you see errors like `new row violates row-level security policy for table "profiles"` during signup, it typically means the application is inserting a profile row where `id != auth.uid()` or the user is not authenticated at the time of insert.
 
 ### `mechanic_profiles`
