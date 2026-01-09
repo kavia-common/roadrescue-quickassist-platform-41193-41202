@@ -5,55 +5,10 @@ import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import MapView from "../components/MapView";
 import { dataService } from "../services/dataService";
+import { geocodeAddressNominatim } from "../services/geocoding";
+import { copyTextToClipboard } from "../services/clipboardUtils";
 
 const CHENNAI = { lat: 13.0827, lng: 80.2707 };
-
-/**
- * Minimal client-side geocoding using OpenStreetMap Nominatim.
- * - Uses `format=jsonv2` and `limit=1` for a single best match.
- * - Requires a "User-Agent" on server-side, but browsers can't set it reliably; we add `accept-language`
- *   and use a modest rate (one request per explicit user action).
- */
-async function geocodeAddressNominatim(address, { signal } = {}) {
-  const q = address.trim();
-  if (!q) return { ok: false, message: "Address is required." };
-
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("q", q);
-  url.searchParams.set("limit", "1");
-  url.searchParams.set("addressdetails", "1");
-
-  const resp = await fetch(url.toString(), {
-    method: "GET",
-    headers: {
-      "Accept": "application/json",
-      // Best-effort; allowed by browsers, unlike User-Agent.
-      "Accept-Language": navigator.language || "en",
-    },
-    signal,
-  });
-
-  if (!resp.ok) {
-    throw new Error(`Geocoding failed (HTTP ${resp.status}). Please try again.`);
-  }
-
-  const data = await resp.json();
-  if (!Array.isArray(data) || data.length === 0) {
-    return { ok: false, message: "No matches found. Please refine the address." };
-  }
-
-  const top = data[0];
-  const lat = Number(top?.lat);
-  const lng = Number(top?.lon);
-  const displayName = String(top?.display_name || q);
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return { ok: false, message: "Found an address match, but coordinates were invalid." };
-  }
-
-  return { ok: true, lat, lng, displayName };
-}
 
 function isSecureEnoughForBrowserAPIs() {
   // Some browser APIs (geolocation, clipboard) require secure context.
@@ -95,39 +50,6 @@ function geolocationErrorToMessage(err) {
   return err.message || "Unable to fetch your location.";
 }
 
-async function tryClipboardWriteText(text) {
-  // Prefer async Clipboard API when available & allowed.
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return true;
-  }
-  return false;
-}
-
-function execCommandCopyFallback(text) {
-  // Fallback for older browsers / blocked clipboard API.
-  // Uses a temporary textarea and document.execCommand('copy').
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    // Keep it off-screen, but in the document
-    ta.style.position = "fixed";
-    ta.style.top = "-1000px";
-    ta.style.left = "-1000px";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-
-    const ok = document.execCommand && document.execCommand("copy");
-    document.body.removeChild(ta);
-    return Boolean(ok);
-  } catch {
-    return false;
-  }
-}
-
 // PUBLIC_INTERFACE
 export function SubmitRequestPage({ user }) {
   /** Form to submit a new breakdown request with address-based geocoding (Nominatim). */
@@ -162,7 +84,7 @@ export function SubmitRequestPage({ user }) {
     if (!issueDescription.trim()) return "Issue description is required.";
     if (!contact.name.trim()) return "Contact name is required.";
     if (!contact.phone.trim()) return "Contact phone is required.";
-    if (!selectedAddress.trim()) return "Please search and select an address.";
+    if (!selectedAddress.trim()) return "Please search and select an address (or use My Location).";
     return "";
   };
 
@@ -220,11 +142,15 @@ export function SubmitRequestPage({ user }) {
     try {
       const result = await geocodeAddressNominatim(q, { signal: controller.signal });
       if (!result.ok) {
-        setGeoStatus({ type: "error", message: result.message || "Could not geocode this address." });
+        // Empty results should not throw; show a helpful message.
+        setGeoStatus({
+          type: "error",
+          message: result.message || "No matches found. Please refine the address.",
+        });
         return;
       }
 
-      setCoordinatesFromNumbers(result.lat, result.lng, { address: result.displayName, silent: true });
+      setCoordinatesFromNumbers(result.lat, result.lon, { address: result.displayName, silent: true });
       setSelectedAddress(result.displayName);
       setGeoStatus({ type: "success", message: "Address found and pinned on the map." });
     } catch (e) {
@@ -285,6 +211,7 @@ export function SubmitRequestPage({ user }) {
         Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))
           ? `GPS (${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)})`
           : "GPS (unknown)";
+
       setCoordinatesFromNumbers(lat, lng, { address: gpsLabel });
     } catch (e) {
       setGeoStatus({ type: "error", message: geolocationErrorToMessage(e) });
@@ -295,38 +222,23 @@ export function SubmitRequestPage({ user }) {
 
   // PUBLIC_INTERFACE
   const copyLocation = async () => {
-    /** Copy the current address + coordinates (when available) to clipboard. */
+    /** Copy the current address + coordinates (when available) to clipboard (robust fallback for sandboxed previews). */
     setGeoStatus({ type: "", message: "" });
 
     const safeAddr = selectedAddress?.trim();
     const coords = `${mapLat.toFixed(5)}, ${mapLng.toFixed(5)}`;
     const text = safeAddr ? `${safeAddr} — ${coords}` : coords;
 
-    try {
-      if (secureContextOk) {
-        const ok = await tryClipboardWriteText(text);
-        if (ok) {
-          setGeoStatus({ type: "success", message: `Copied: ${text}` });
-          return;
-        }
-      }
-
-      const fallbackOk = execCommandCopyFallback(text);
-      if (fallbackOk) {
-        setGeoStatus({ type: "success", message: `Copied (fallback): ${text}` });
-        return;
-      }
-
-      setGeoStatus({
-        type: "error",
-        message: "Could not copy automatically (clipboard blocked). Please copy manually.",
-      });
-    } catch (e) {
-      setGeoStatus({
-        type: "error",
-        message: e?.message ? `Could not copy: ${e.message}` : "Could not copy to clipboard.",
-      });
+    const res = await copyTextToClipboard(text);
+    if (res.ok) {
+      setGeoStatus({ type: "success", message: `Copied: ${text}` });
+      return;
     }
+
+    setGeoStatus({
+      type: "error",
+      message: "Could not copy automatically (clipboard blocked). Please copy manually.",
+    });
   };
 
   // Cleanup any in-flight geocode when unmounting
@@ -433,7 +345,8 @@ export function SubmitRequestPage({ user }) {
             <div className="card-body">
               {!secureContextOk ? (
                 <div className="alert alert-info" style={{ marginBottom: 10 }}>
-                  GPS and clipboard features work best over <strong>HTTPS</strong> (or localhost). Current origin is not a secure context, so browser permissions may be blocked.
+                  GPS and clipboard features work best over <strong>HTTPS</strong> (or localhost). Current origin is not a
+                  secure context, so browser permissions may be blocked.
                 </div>
               ) : null}
 
