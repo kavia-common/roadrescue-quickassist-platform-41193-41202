@@ -136,6 +136,102 @@ async function supaUserToAppUser(supaUser) {
   return { id: supaUser.id, email: supaUser.email, role: roleInfo.role, approved: roleInfo.approved };
 }
 
+/** Extract a friendlier UI message from a supabase-js error (best-effort). */
+function friendlySupabaseErrorMessage(err, fallback) {
+  const msg = err?.message || "";
+  if (!msg) return fallback;
+  if (msg.toLowerCase().includes("row level security")) return "Permission denied. Please contact an admin.";
+  return msg;
+}
+
+/** Best-effort: detect if a Postgres column is missing based on error message. */
+function isMissingColumnError(err) {
+  const msg = err?.message || "";
+  return msg.toLowerCase().includes("column") && msg.toLowerCase().includes("does not exist");
+}
+
+/**
+ * Atomic lifecycle update helpers (Supabase mode).
+ * Added for parity across apps; the user website typically reads status,
+ * but admin/mechanic portals perform transitions.
+ */
+async function supaAtomicAcceptRequest(supa, { requestId, mechanicId, assignedAtIso }) {
+  const { data: row1, error: err1 } = await supa
+    .from("requests")
+    .update({ mechanic_id: mechanicId, status: "assigned", assigned_at: assignedAtIso })
+    .eq("id", requestId)
+    .is("mechanic_id", null)
+    .select("*")
+    .maybeSingle();
+
+  if (!err1) return { updated: Boolean(row1), row: row1, used: "preferred" };
+
+  if (!isMissingColumnError(err1)) throw new Error(friendlySupabaseErrorMessage(err1, "Could not accept request."));
+
+  const { data: row2, error: err2 } = await supa
+    .from("requests")
+    .update({ assigned_mechanic_id: mechanicId, status: "ASSIGNED", assigned_at: assignedAtIso })
+    .eq("id", requestId)
+    .is("assigned_mechanic_id", null)
+    .select("*")
+    .maybeSingle();
+
+  if (err2) throw new Error(friendlySupabaseErrorMessage(err2, "Could not accept request."));
+  return { updated: Boolean(row2), row: row2, used: "legacy" };
+}
+
+async function supaAtomicStartRequest(supa, { requestId, mechanicId }) {
+  const { data: row1, error: err1 } = await supa
+    .from("requests")
+    .update({ status: "in_progress" })
+    .eq("id", requestId)
+    .eq("mechanic_id", mechanicId)
+    .eq("status", "assigned")
+    .select("*")
+    .maybeSingle();
+
+  if (!err1) return { updated: Boolean(row1), row: row1, used: "preferred" };
+
+  if (!isMissingColumnError(err1)) throw new Error(friendlySupabaseErrorMessage(err1, "Could not start request."));
+
+  const { data: row2, error: err2 } = await supa
+    .from("requests")
+    .update({ status: "WORKING" })
+    .eq("id", requestId)
+    .eq("assigned_mechanic_id", mechanicId)
+    .select("*")
+    .maybeSingle();
+
+  if (err2) throw new Error(friendlySupabaseErrorMessage(err2, "Could not start request."));
+  return { updated: Boolean(row2), row: row2, used: "legacy" };
+}
+
+async function supaAtomicCompleteRequest(supa, { requestId, mechanicId, completedAtIso }) {
+  const { data: row1, error: err1 } = await supa
+    .from("requests")
+    .update({ status: "completed", completed_at: completedAtIso })
+    .eq("id", requestId)
+    .eq("mechanic_id", mechanicId)
+    .eq("status", "in_progress")
+    .select("*")
+    .maybeSingle();
+
+  if (!err1) return { updated: Boolean(row1), row: row1, used: "preferred" };
+
+  if (!isMissingColumnError(err1)) throw new Error(friendlySupabaseErrorMessage(err1, "Could not complete request."));
+
+  const { data: row2, error: err2 } = await supa
+    .from("requests")
+    .update({ status: "COMPLETED", completed_at: completedAtIso })
+    .eq("id", requestId)
+    .eq("assigned_mechanic_id", mechanicId)
+    .select("*")
+    .maybeSingle();
+
+  if (err2) throw new Error(friendlySupabaseErrorMessage(err2, "Could not complete request."));
+  return { updated: Boolean(row2), row: row2, used: "legacy" };
+}
+
 /*
   FIELD MAPPING NOTES (MUST BE IDENTICAL ACROSS ALL 3 FRONTENDS/SERVICES)
 
@@ -529,6 +625,43 @@ export const dataService = {
 
     profiler?.mark("createRequest:end");
     return request;
+  },
+
+  // PUBLIC_INTERFACE
+  async acceptRequestAtomic({ requestId, mechanicId }) {
+    /**
+     * PUBLIC_INTERFACE
+     * Atomic accept helper (open -> assigned with assigned_at).
+     * Mostly used by mechanic/admin apps; included here for parity.
+     */
+    const supa = getSupabase();
+    if (!supa) throw new Error("Supabase is not configured.");
+    const { updated } = await supaAtomicAcceptRequest(supa, { requestId, mechanicId, assignedAtIso: new Date().toISOString() });
+    return updated;
+  },
+
+  // PUBLIC_INTERFACE
+  async startRequestAtomic({ requestId, mechanicId }) {
+    /**
+     * PUBLIC_INTERFACE
+     * Atomic start helper (assigned -> in_progress).
+     */
+    const supa = getSupabase();
+    if (!supa) throw new Error("Supabase is not configured.");
+    const { updated } = await supaAtomicStartRequest(supa, { requestId, mechanicId });
+    return updated;
+  },
+
+  // PUBLIC_INTERFACE
+  async completeRequestAtomic({ requestId, mechanicId }) {
+    /**
+     * PUBLIC_INTERFACE
+     * Atomic complete helper (in_progress -> completed with completed_at).
+     */
+    const supa = getSupabase();
+    if (!supa) throw new Error("Supabase is not configured.");
+    const { updated } = await supaAtomicCompleteRequest(supa, { requestId, mechanicId, completedAtIso: new Date().toISOString() });
+    return updated;
   },
 
   // PUBLIC_INTERFACE
