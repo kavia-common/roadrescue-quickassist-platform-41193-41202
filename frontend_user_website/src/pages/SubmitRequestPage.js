@@ -4,6 +4,7 @@ import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { dataService } from "../services/dataService";
+import { MapPanel } from "../components/MapPanel";
 
 // PUBLIC_INTERFACE
 export function SubmitRequestPage({ user }) {
@@ -12,6 +13,7 @@ export function SubmitRequestPage({ user }) {
   const [vehicle, setVehicle] = useState({ make: "", model: "", year: "", plate: "" });
   const [issueDescription, setIssueDescription] = useState("");
   const [contact, setContact] = useState({ name: "", phone: "" });
+  const [locationText, setLocationText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -32,7 +34,13 @@ export function SubmitRequestPage({ user }) {
 
     setBusy(true);
     try {
-      const req = await dataService.createRequest({ user, vehicle, issueDescription, contact });
+      const req = await dataService.createRequest({
+        user,
+        vehicle,
+        issueDescription,
+        contact,
+        location: { text: locationText.trim() },
+      });
       navigate(`/requests/${req.id}`);
     } catch (err) {
       setError(err.message || "Could not submit request.");
@@ -48,7 +56,7 @@ export function SubmitRequestPage({ user }) {
         <p className="lead">Tell us what happened. A mechanic will review and accept it.</p>
       </div>
 
-      <Card title="Request details" subtitle="No maps/AI—manual details only.">
+      <Card title="Request details" subtitle="Enter a location to preview a map and help the mechanic find you faster.">
         <form onSubmit={submit} className="form">
           <div className="grid2">
             <Input
@@ -80,6 +88,17 @@ export function SubmitRequestPage({ user }) {
               placeholder="Optional"
             />
           </div>
+
+          <Input
+            label="Breakdown location"
+            name="location"
+            value={locationText}
+            onChange={(e) => setLocationText(e.target.value)}
+            placeholder="Address, landmark, or City, State"
+            hint="Tip: include a nearby landmark or highway exit if possible."
+          />
+
+          <MapPanel title="Map preview" locationText={locationText} height={280} />
 
           <div className="field">
             <label className="label" htmlFor="issue">

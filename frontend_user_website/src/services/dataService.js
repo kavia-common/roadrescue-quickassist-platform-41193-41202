@@ -13,6 +13,37 @@ function uid(prefix = "id") {
   return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
 }
 
+/**
+ * Bound an async operation so UI never waits indefinitely on network calls.
+ * Supabase calls can sometimes stall a long time if the URL is wrong, blocked, or captive portals exist.
+ */
+function withTimeout(promise, ms, label) {
+  let t;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      t = window.setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    }),
+  ]).finally(() => {
+    if (t) window.clearTimeout(t);
+  });
+}
+
+function isTimeoutErrorMessage(msg) {
+  return typeof msg === "string" && msg.toLowerCase().includes("timed out after");
+}
+
+function formatAuthError(err, context) {
+  const msg = err?.message || String(err || "");
+  if (isTimeoutErrorMessage(msg)) {
+    return new Error(
+      `${context} is taking too long. Cannot reach Supabase. ` +
+        `Check REACT_APP_SUPABASE_URL / REACT_APP_SUPABASE_KEY and your network connection.`
+    );
+  }
+  return new Error(msg || `${context} failed.`);
+}
+
 function readJson(key, fallback) {
   try {
     const raw = window.localStorage.getItem(key);
@@ -115,13 +146,27 @@ function getSupabase() {
 async function supaGetUserRole(supa, userId, email) {
   // Minimal role table assumption: public.profiles(id uuid primary key, email text, role text, approved boolean)
   // If not present, default to "user".
+  //
+  // IMPORTANT: This is called immediately after auth. If it hangs, the UI can look like login is stuck.
+  // So we bound it with a short timeout and fall back to defaults.
   try {
-    const { data, error } = await supa.from("profiles").select("role,approved").eq("id", userId).maybeSingle();
+    const { data, error } = await withTimeout(
+      supa.from("profiles").select("role,approved").eq("id", userId).maybeSingle(),
+      3500,
+      "Supabase profiles lookup"
+    );
+
     if (error) return { role: "user", approved: true };
+
     if (!data) {
-      await supa.from("profiles").insert({ id: userId, email, role: "user", approved: true });
+      await withTimeout(
+        supa.from("profiles").insert({ id: userId, email, role: "user", approved: true }),
+        3500,
+        "Supabase profiles insert"
+      );
       return { role: "user", approved: true };
     }
+
     return { role: data.role || "user", approved: data.approved ?? true };
   } catch {
     return { role: "user", approved: true };
@@ -220,15 +265,20 @@ export const dataService = {
     ensureSeedData();
     const supa = getSupabase();
     if (supa) {
-      const { data, error } = await supa.auth.signUp({ email, password });
-      if (error) throw new Error(error.message);
-      // When email confirmation is enabled, user might be null; still return.
-      const user = data.user;
-      if (user) {
-        const roleInfo = await supaGetUserRole(supa, user.id, email);
-        return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
+      try {
+        const { data, error } = await withTimeout(supa.auth.signUp({ email, password }), 8000, "Supabase signUp");
+        if (error) throw formatAuthError(error, "Registration");
+
+        // When email confirmation is enabled, user might be null; still return.
+        const user = data.user;
+        if (user) {
+          const roleInfo = await supaGetUserRole(supa, user.id, email);
+          return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
+        }
+        return { id: "pending", email, role: "user", approved: true };
+      } catch (e) {
+        throw formatAuthError(e, "Registration");
       }
-      return { id: "pending", email, role: "user", approved: true };
     }
 
     const users = getLocalUsers();
@@ -246,11 +296,20 @@ export const dataService = {
     ensureSeedData();
     const supa = getSupabase();
     if (supa) {
-      const { data, error } = await supa.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
-      const user = data.user;
-      const roleInfo = await supaGetUserRole(supa, user.id, user.email);
-      return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
+      try {
+        const { data, error } = await withTimeout(
+          supa.auth.signInWithPassword({ email, password }),
+          8000,
+          "Supabase signInWithPassword"
+        );
+        if (error) throw formatAuthError(error, "Login");
+
+        const user = data.user;
+        const roleInfo = await supaGetUserRole(supa, user.id, user.email);
+        return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
+      } catch (e) {
+        throw formatAuthError(e, "Login");
+      }
     }
 
     const users = getLocalUsers();
@@ -270,23 +329,33 @@ export const dataService = {
 
     const finalRedirect = redirectTo || window.location.origin;
 
-    const { error } = await supa.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: finalRedirect,
-      },
-    });
+    try {
+      const { error } = await withTimeout(
+        supa.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: finalRedirect },
+        }),
+        8000,
+        "Supabase signInWithOAuth"
+      );
 
-    // On success the browser will redirect away; if we get here, it either errored or popup-based flows.
-    if (error) throw new Error(error.message);
-    return true;
+      // On success the browser will redirect away; if we get here, it either errored or popup-based flows.
+      if (error) throw formatAuthError(error, "Google sign-in");
+      return true;
+    } catch (e) {
+      throw formatAuthError(e, "Google sign-in");
+    }
   },
 
   // PUBLIC_INTERFACE
   async logout() {
     const supa = getSupabase();
     if (supa) {
-      await supa.auth.signOut();
+      try {
+        await withTimeout(supa.auth.signOut(), 8000, "Supabase signOut");
+      } catch {
+        // If logout fails, still allow UI to proceed to logged-out state.
+      }
       return;
     }
     clearLocalSession();
@@ -296,24 +365,6 @@ export const dataService = {
   async getCurrentUser() {
     ensureSeedData();
     const supa = getSupabase();
-
-    // IMPORTANT:
-    // In some environments the network call behind supabase.auth.getUser() can hang indefinitely
-    // (e.g. bad URL, blocked network, captive portal). If that happens, the app boot can stall.
-    // We enforce a small timeout and treat it as "logged out" so the app can still render.
-    const withTimeout = async (promise, ms, label) => {
-      let t;
-      try {
-        return await Promise.race([
-          promise,
-          new Promise((_, reject) => {
-            t = window.setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-          }),
-        ]);
-      } finally {
-        if (t) window.clearTimeout(t);
-      }
-    };
 
     if (supa) {
       try {
@@ -400,6 +451,7 @@ export const dataService = {
           make: typeof vehicle.make === "string" ? vehicle.make : "",
           model: typeof vehicle.model === "string" ? vehicle.model : "",
         };
+
         // Defensive for contact
         let contact = r.contact;
         if (!contact || typeof contact !== "object") {
@@ -408,6 +460,16 @@ export const dataService = {
           if (r.contact_phone) contact.phone = r.contact_phone;
           if (!contact.name && typeof r.contact === "string") contact.name = r.contact;
         }
+
+        // Location is optional: expected as jsonb { text: string }
+        let location = r.location;
+        if (!location || typeof location !== "object") {
+          location = {};
+          // Legacy fallback if a column exists
+          if (typeof r.location_text === "string") location.text = r.location_text;
+        }
+        location = { text: typeof location.text === "string" ? location.text : "" };
+
         return {
           id: r.id,
           createdAt: r.created_at,
@@ -416,6 +478,7 @@ export const dataService = {
           vehicle,
           issueDescription: r.issue_description,
           contact,
+          location,
           status: normalizeStatus(r.status),
           assignedMechanicId: r.assigned_mechanic_id,
           assignedMechanicEmail: r.assigned_mechanic_email,
@@ -435,7 +498,7 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
-  async createRequest({ user, vehicle, issueDescription, contact }) {
+  async createRequest({ user, vehicle, issueDescription, contact, location }) {
     ensureSeedData();
     const supa = getSupabase();
     const nowIso = new Date().toISOString();
@@ -450,6 +513,10 @@ export const dataService = {
       name: contact?.name || "",
       phone: contact?.phone || "",
     };
+    // Location is optional; keep a stable shape
+    const safeLocation = {
+      text: typeof location?.text === "string" ? location.text : "",
+    };
 
     // Prep mock request for localStorage mode
     const request = {
@@ -460,6 +527,7 @@ export const dataService = {
       vehicle: safeVehicle, // only make/model is stored for "vehicle"
       issueDescription,
       contact: safeContact,
+      location: safeLocation,
       status: "Submitted",
       assignedMechanicId: null,
       assignedMechanicEmail: null,
@@ -477,6 +545,7 @@ export const dataService = {
         vehicle: safeVehicle,
         issue_description: issueDescription,
         contact: safeContact,
+        location: safeLocation,
         status: "open", // always open on create
         assigned_mechanic_id: null,
         assigned_mechanic_email: null,
@@ -499,12 +568,20 @@ export const dataService = {
         make: typeof vehicleObj.make === "string" ? vehicleObj.make : "",
         model: typeof vehicleObj.model === "string" ? vehicleObj.model : "",
       };
+
       let contactObj = data.contact;
       if (!contactObj || typeof contactObj !== "object") {
         contactObj = {};
         if (data.contact_name) contactObj.name = data.contact_name;
         if (data.contact_phone) contactObj.phone = data.contact_phone;
       }
+
+      let locationObj = data.location;
+      if (!locationObj || typeof locationObj !== "object") {
+        locationObj = {};
+        if (typeof data.location_text === "string") locationObj.text = data.location_text;
+      }
+      locationObj = { text: typeof locationObj.text === "string" ? locationObj.text : "" };
 
       const created = {
         id: data.id,
@@ -514,6 +591,7 @@ export const dataService = {
         vehicle: vehicleObj,
         issueDescription: data.issue_description,
         contact: contactObj,
+        location: locationObj,
         status: data.status,
         assignedMechanicId: data.assigned_mechanic_id,
         assignedMechanicEmail: data.assigned_mechanic_email,

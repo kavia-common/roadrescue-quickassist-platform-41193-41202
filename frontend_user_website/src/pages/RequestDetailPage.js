@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { dataService } from "../services/dataService";
 import { statusLabel } from "../services/statusUtils";
+import { MapPanel } from "../components/MapPanel";
 
 // PUBLIC_INTERFACE
 export function RequestDetailPage({ user }) {
@@ -52,6 +53,8 @@ export function RequestDetailPage({ user }) {
 
   if (!req) return <div className="container"><div className="skeleton">Loading…</div></div>;
 
+  const locationText = req?.location?.text || "";
+
   return (
     <div className="container">
       <div className="hero">
@@ -77,9 +80,12 @@ export function RequestDetailPage({ user }) {
             <div><span className="k">Name</span><span className="v">{req.contact.name}</span></div>
             <div><span className="k">Phone</span><span className="v">{req.contact.phone}</span></div>
             <div><span className="k">Created</span><span className="v">{new Date(req.createdAt).toLocaleString()}</span></div>
+            <div><span className="k">Location</span><span className="v">{locationText || "—"}</span></div>
           </div>
         </Card>
       </div>
+
+      <MapPanel title="Location map" locationText={locationText} height={320} />
 
       <Card title="Issue description">
         <p className="p">{req.issueDescription}</p>
