@@ -25,11 +25,19 @@ function App() {
     let mounted = true;
 
     // 1) Initial boot: load current user (handles Supabase persisted session after OAuth redirect)
+    // IMPORTANT: Never allow boot to hang indefinitely if Supabase/network throws.
     (async () => {
-      const u = await dataService.getCurrentUser();
-      if (mounted) {
-        setUser(u);
-        setBooted(true);
+      try {
+        const u = await dataService.getCurrentUser();
+        if (mounted) setUser(u);
+      } catch (e) {
+        // Fallback to unauthenticated mode so the app can render /login and /about.
+        // This prevents the preview from being stuck on "Loading…" forever.
+        // eslint-disable-next-line no-console
+        console.error("[App boot] getCurrentUser failed; continuing in logged-out mode:", e);
+        if (mounted) setUser(null);
+      } finally {
+        if (mounted) setBooted(true);
       }
     })();
 
