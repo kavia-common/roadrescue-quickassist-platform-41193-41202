@@ -84,6 +84,15 @@ Ensured columns:
 - `cancelled_at timestamptz`
 - `updated_at timestamptz not null default now()`
 
+Additional analytics/search fields (added via 2026-01-09 change):
+- `vehicle_make text`
+- `vehicle_model text`
+- `vehicle_plate text`
+- `issue_description text`
+- `address text`
+- `user_email text`
+- `assigned_mechanic_email text`
+
 ### `request_notes`
 Notes attached to a request (audit + communication).
 
@@ -124,6 +133,7 @@ Trigger:
 
 - `profiles(role)`, `profiles(approved)`
 - `requests(requester_id)`, `requests(assigned_mechanic_id)`, `requests(status)`, `requests(submitted_at desc)`
+- `requests(vehicle_plate)`, `requests(vehicle_make)`, `requests(vehicle_model)`, `requests(created_at)`, `requests(status)`
 - `request_notes(request_id, created_at desc)`, `request_notes(author_id)`
 
 ## RLS policies (summary)
@@ -340,6 +350,22 @@ create index if not exists idx_requests_requester_id on public.requests(requeste
 create index if not exists idx_requests_assigned_mechanic_id on public.requests(assigned_mechanic_id);
 create index if not exists idx_requests_status on public.requests(status);
 create index if not exists idx_requests_submitted_at on public.requests(submitted_at desc);
+
+-- Option A (analytics/search columns + indexes)
+alter table if exists public.requests
+  add column if not exists vehicle_make text,
+  add column if not exists vehicle_model text,
+  add column if not exists vehicle_plate text,
+  add column if not exists issue_description text,
+  add column if not exists address text,
+  add column if not exists user_email text,
+  add column if not exists assigned_mechanic_email text;
+
+create index if not exists idx_requests_vehicle_plate on public.requests (vehicle_plate);
+create index if not exists idx_requests_vehicle_make on public.requests (vehicle_make);
+create index if not exists idx_requests_vehicle_model on public.requests (vehicle_model);
+create index if not exists idx_requests_created_at on public.requests (created_at);
+create index if not exists idx_requests_status on public.requests (status);
 
 create index if not exists idx_request_notes_request_id_created_at on public.request_notes(request_id, created_at desc);
 create index if not exists idx_request_notes_author_id on public.request_notes(author_id);
