@@ -42,7 +42,7 @@ async function safeReadJson(resp) {
 }
 
 // PUBLIC_INTERFACE
-export async function geocodeAddress(address, { countryCodes = "in", limit = 1 } = {}) {
+export async function geocodeAddress(address, { countryCodes = "in", limit = 1, profiler } = {}) {
   /**
    * Geocode a free-form address string using Nominatim.
    *
@@ -50,6 +50,7 @@ export async function geocodeAddress(address, { countryCodes = "in", limit = 1 }
    * @param {Object} [options]
    * @param {string} [options.countryCodes="in"] - Optional country code filter (comma-separated), e.g. "in".
    * @param {number} [options.limit=1] - Number of results to return (we pick the first result).
+   * @param {Object} [options.profiler] - Optional profiler instance (see services/perfProfiler.js).
    * @returns {Promise<GeocodeResult>} - {lat, lng, displayName}
    *
    * @throws {Error} When address is empty, network fails, or no results are found.
@@ -70,6 +71,7 @@ export async function geocodeAddress(address, { countryCodes = "in", limit = 1 }
     url.searchParams.set("countrycodes", countryCodes);
   }
 
+  profiler?.mark("geocode_fetch_start");
   const resp = await fetch(url.toString(), {
     method: "GET",
     headers: {
@@ -77,14 +79,21 @@ export async function geocodeAddress(address, { countryCodes = "in", limit = 1 }
       "Accept": "application/json",
     },
   });
+  profiler?.mark("geocode_fetch_end");
+  profiler?.measure("geocode:network", "geocode_fetch_start", "geocode_fetch_end");
 
   if (!resp.ok) {
+    profiler?.info("geocode:non_200", { status: resp.status });
     const data = await safeReadJson(resp);
     const msg = data?.error || `Geocoding failed (HTTP ${resp.status}).`;
     throw new Error(msg);
   }
 
+  profiler?.mark("geocode_json_start");
   const data = await safeReadJson(resp);
+  profiler?.mark("geocode_json_end");
+  profiler?.measure("geocode:json_parse", "geocode_json_start", "geocode_json_end");
+
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error("No matching location found. Try a more specific address or nearby landmark.");
   }
@@ -97,6 +106,13 @@ export async function geocodeAddress(address, { countryCodes = "in", limit = 1 }
   if (lat == null || lng == null) {
     throw new Error("Geocoding returned an invalid coordinate. Please try a different query.");
   }
+
+  profiler?.info("geocode:result", {
+    hasDisplayName: Boolean(displayName),
+    // String lengths help detect unusually large payloads without logging PII.
+    queryLength: q.length,
+    displayNameLength: displayName.length,
+  });
 
   return {
     lat,

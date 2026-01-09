@@ -355,12 +355,25 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
-  async createRequest({ user, vehicle, issueDescription, contact }) {
+  async createRequest({ user, vehicle, issueDescription, contact, profiler } = {}) {
+    /**
+     * Create a new request.
+     *
+     * @param {Object} params
+     * @param {Object} params.user
+     * @param {Object} params.vehicle
+     * @param {string} params.issueDescription
+     * @param {Object} params.contact
+     * @param {Object} [params.profiler] - Optional profiler instance to measure create steps.
+     */
     ensureSeedData();
     const supa = getSupabase();
     const nowIso = new Date().toISOString();
 
+    profiler?.mark("createRequest:start");
+
     // ENFORCED: Write vehicle as {make, model} ONLY for every create (ignore year/plate).
+    profiler?.mark("createRequest:before_payload_prep");
     const safeVehicle = {
       make: vehicle && typeof vehicle.make === "string" ? vehicle.make : "",
       model: vehicle && typeof vehicle.model === "string" ? vehicle.model : "",
@@ -385,6 +398,8 @@ export const dataService = {
       assignedMechanicEmail: null,
       notes: [],
     };
+    profiler?.mark("createRequest:after_payload_prep");
+    profiler?.measure("createRequest:payload_prep", "createRequest:before_payload_prep", "createRequest:after_payload_prep");
 
     if (supa) {
       // Prepare payload for Supabase: vehicle={make,model}, status="open", omit id, only valid/null UUIDs, no custom fields.
@@ -400,12 +415,17 @@ export const dataService = {
         assigned_mechanic_email: null,
         notes: [],
       };
+
+      profiler?.mark("createRequest:supabase_insert_start");
       // Use .select() to get server-inserted row for ID
       const { data, error } = await supa.from("requests").insert(insertPayload).select().maybeSingle();
+      profiler?.mark("createRequest:supabase_insert_end");
+      profiler?.measure("createRequest:supabase_insert", "createRequest:supabase_insert_start", "createRequest:supabase_insert_end");
 
       if (error) throw new Error(error.message);
       if (!data) throw new Error("Failed to insert request.");
 
+      profiler?.mark("createRequest:normalize_start");
       // Always normalize vehicle to {make,model} in UI state
       let vehicleObj = data.vehicle;
       if (!vehicleObj || typeof vehicleObj !== "object") {
@@ -423,6 +443,10 @@ export const dataService = {
         if (data.contact_name) contactObj.name = data.contact_name;
         if (data.contact_phone) contactObj.phone = data.contact_phone;
       }
+      profiler?.mark("createRequest:normalize_end");
+      profiler?.measure("createRequest:normalize_result", "createRequest:normalize_start", "createRequest:normalize_end");
+
+      profiler?.mark("createRequest:end");
 
       return {
         id: data.id,
@@ -440,8 +464,17 @@ export const dataService = {
     }
 
     // In mock mode, assign custom string ID.
+    profiler?.mark("createRequest:localstorage_read_start");
     const all = getLocalRequests();
+    profiler?.mark("createRequest:localstorage_read_end");
+    profiler?.measure("createRequest:localstorage_read", "createRequest:localstorage_read_start", "createRequest:localstorage_read_end");
+
+    profiler?.mark("createRequest:localstorage_write_start");
     setLocalRequests([request, ...all]);
+    profiler?.mark("createRequest:localstorage_write_end");
+    profiler?.measure("createRequest:localstorage_write", "createRequest:localstorage_write_start", "createRequest:localstorage_write_end");
+
+    profiler?.mark("createRequest:end");
     return request;
   },
 

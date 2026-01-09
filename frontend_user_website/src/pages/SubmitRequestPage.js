@@ -6,6 +6,7 @@ import { Button } from "../components/ui/Button";
 import { MapView } from "../components/MapView";
 import { dataService } from "../services/dataService";
 import { geocodeAddress } from "../services/geocodingService";
+import { createProfiler } from "../services/perfProfiler";
 
 function parseNumberOrNull(v) {
   const t = String(v ?? "").trim();
@@ -60,18 +61,28 @@ export function SubmitRequestPage({ user }) {
   };
 
   const onFindLocation = async () => {
+    const profiler = createProfiler("find_location");
+    profiler.mark("start");
+
     setError("");
     setLocationStatus({ type: "", message: "" });
 
     const q = locationText.trim();
     if (!q) {
       setLocationStatus({ type: "error", message: "Enter an address/landmark first, then click “Find location”." });
+      profiler.end({ reason: "empty_query" });
       return;
     }
 
     setFindBusy(true);
     try {
-      const result = await geocodeAddress(q, { countryCodes: "in", limit: 1 });
+      profiler.mark("before_geocode");
+      const result = await geocodeAddress(q, { countryCodes: "in", limit: 1, profiler });
+      profiler.mark("after_geocode");
+      profiler.measure("find_location:geocode_total", "before_geocode", "after_geocode");
+
+      // React state updates / UI refresh can be a bottleneck if map invalidation is heavy.
+      profiler.mark("before_state_updates");
 
       // Populate fields that drive the map marker/center.
       setLatText(String(result.lat));
@@ -81,30 +92,60 @@ export function SubmitRequestPage({ user }) {
       setLocationText(result.displayName);
 
       setLocationStatus({ type: "info", message: `Found: ${result.displayName}` });
+
+      profiler.mark("after_state_updates");
+      profiler.measure("find_location:state_updates_sync", "before_state_updates", "after_state_updates");
     } catch (e) {
       setLocationStatus({ type: "error", message: e?.message || "Could not find that location." });
+      profiler.info("find_location:error", { message: e?.message || String(e) });
     } finally {
       setFindBusy(false);
+      profiler.mark("end");
+      profiler.measure("find_location:total", "start", "end");
+      profiler.end();
     }
   };
 
   const submit = async (e) => {
+    const profiler = createProfiler("submit_request");
+    profiler.mark("start");
+
     e.preventDefault();
+
+    profiler.mark("before_validate");
     setError("");
     const msg = validate();
-    if (msg) return setError(msg);
+    profiler.mark("after_validate");
+    profiler.measure("submit:validate", "before_validate", "after_validate");
+
+    if (msg) {
+      setError(msg);
+      profiler.end({ outcome: "validation_error" });
+      return;
+    }
 
     setBusy(true);
     try {
       // Persisting of location is intentionally not wired into the data layer here,
       // because the current request schema in this repo does not include location fields.
       // This change adds a UI map preview for the request flow and mechanic detail view.
-      const req = await dataService.createRequest({ user, vehicle, issueDescription, contact });
 
+      profiler.mark("before_create_request");
+      const req = await dataService.createRequest({ user, vehicle, issueDescription, contact });
+      profiler.mark("after_create_request");
+      profiler.measure("submit:db_write(createRequest)", "before_create_request", "after_create_request");
+
+      profiler.mark("before_navigate");
       // In mock mode, the UI could extend local storage later; for now we navigate as usual.
       navigate(`/requests/${req.id}`);
+      profiler.mark("after_navigate");
+      profiler.measure("submit:navigate_call", "before_navigate", "after_navigate");
+
+      profiler.end({ outcome: "success", requestIdPrefix: String(req.id || "").slice(0, 8) });
     } catch (err) {
+      profiler.info("submit:error", { message: err?.message || String(err) });
       setError(err.message || "Could not submit request.");
+      profiler.end({ outcome: "error" });
     } finally {
       setBusy(false);
     }
