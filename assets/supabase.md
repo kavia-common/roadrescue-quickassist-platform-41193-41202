@@ -2,9 +2,9 @@
 
 This repo contains three independent React apps:
 
-- `frontend_user_website`
-- `frontend_mechanic_portal`
-- `frontend_admin_panel`
+- `frontend_user_website` (port 3000)
+- `frontend_mechanic_portal` (port 3001)
+- `frontend_admin_panel` (port 3002)
 
 All three apps can run in **mock mode** (localStorage) or **Supabase mode** (auth + persistence).
 
@@ -17,126 +17,98 @@ Each frontend reads:
 
 If either is missing/empty, the app automatically falls back to **mock mode**.
 
-## Tables (recommended)
+## Database schema (implemented)
 
-These apps are written to *attempt* to use the following tables when Supabase is configured.
+### `public.profiles`
 
-Below is a simple SQL starter schema you can run in **Supabase → SQL editor** (adjust types as desired):
+Used for roles and mechanic profile data.
 
-```sql
--- PROFILES: role + approval + optional mechanic profile json
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  email text,
-  role text not null default 'user',
-  approved boolean not null default true,
-  profile jsonb
-);
+Columns:
 
--- REQUESTS: persisted breakdown requests and mechanic assignment/status
-create table if not exists public.requests (
-  id text primary key,
-  created_at timestamptz not null default now(),
-  user_id uuid references auth.users(id) on delete set null,
-  user_email text,
-  vehicle jsonb,
-  issue_description text,
-  contact jsonb,
-  status text,
-  assigned_mechanic_id uuid references auth.users(id) on delete set null,
-  assigned_mechanic_email text,
-  notes jsonb
-);
+- `id` (uuid, PK) — references `auth.users(id)` (cascade delete)
+- `role` (text) — defaults to `user` (used for RLS role checks)
+  - expected values in this MVP: `user`, `mechanic`, `approved_mechanic`, `admin`
+- `display_name` (text, nullable)
+- `service_area` (text, nullable)
+- (may exist from earlier iterations): `full_name`, `created_at`
 
--- FEES: single row keyed by "default"
-create table if not exists public.fees (
-  id text primary key,
-  base_fee numeric,
-  per_mile numeric,
-  after_hours_multiplier numeric
-);
-```
+### `public.requests`
 
-### RLS (Row Level Security) notes (minimal)
+Stores breakdown requests and assignment/status.
 
-The JS code reads/writes these tables directly from the browser, so RLS must allow the needed operations.
+Required fields for this subtask (now present):
 
-A minimal (not production-grade) approach for MVP:
+- `user_id` (uuid, NOT NULL) — references `auth.users(id)` (cascade delete)
+- `status` (text, defaults to `open`)
+- `lat` (double precision, nullable)
+- `lon` (double precision, nullable)
+- `address` (text, nullable)
+- `notes` (text, nullable)
+- `created_at` (timestamptz, defaults to now())
 
-- Enable RLS on `profiles`, `requests`, `fees`
-- Add policies so authenticated users can:
-  - read their own `profiles` row
-  - insert/update their own `profiles` row (for profile json + role bootstrap)
-  - insert `requests` where `user_id = auth.uid()`
-  - read their own `requests`
-- Admin/mechanic portals will need broader read/update policies (or you can keep them in mock mode until you add stricter policies and role checks).
+Other columns may already exist (vehicle fields, contacts, assignment fields, etc.) and are left intact.
 
-Example starting point (adjust to your security needs):
+### Automatic `updated_at`
 
-```sql
-alter table public.profiles enable row level security;
-alter table public.requests enable row level security;
-alter table public.fees enable row level security;
+A trigger updates `requests.updated_at` on every update (if `updated_at` column exists).
 
--- Profiles: user can read/update their own row
-create policy "profiles self read" on public.profiles
-  for select to authenticated
-  using (id = auth.uid());
+## RLS (Row Level Security) (implemented)
 
-create policy "profiles self upsert" on public.profiles
-  for insert to authenticated
-  with check (id = auth.uid());
+Because the JS code reads/writes directly from the browser, RLS must allow the required operations.
 
-create policy "profiles self update" on public.profiles
-  for update to authenticated
-  using (id = auth.uid());
+### Helper functions (used by policies)
 
--- Requests: user can insert/read their own requests
-create policy "requests self insert" on public.requests
-  for insert to authenticated
-  with check (user_id = auth.uid());
+- `public.is_admin()` returns true if `profiles.role = 'admin'` for `auth.uid()`
+- `public.is_mechanic()` returns true if role is in `('mechanic','approved_mechanic','admin')`
 
-create policy "requests self read" on public.requests
-  for select to authenticated
-  using (user_id = auth.uid());
-```
+### `public.profiles` policies
 
-### `profiles` table
+Enabled: `ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;`
 
-Used for roles/approvals.
+Policies:
 
-Recommended columns:
+- **Self read**: authenticated users can `SELECT` their own profile row
+- **Self insert**: authenticated users can `INSERT` their own profile row (id must equal `auth.uid()`)
+- **Self update**: authenticated users can `UPDATE` their own profile row
+- **Admin read**: admins can `SELECT` all profiles
+- **Admin update**: admins can `UPDATE` all profiles
 
-- `id` (uuid, PK) — same as `auth.users.id`
-- `email` (text)
-- `role` (text) — one of: `user`, `mechanic`, `approved_mechanic`, `admin`
-- `approved` (boolean)
-- `profile` (jsonb, optional) — mechanic profile fields (name/serviceArea)
+### `public.requests` policies
 
-### `requests` table
+Enabled: `ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;`
 
-Recommended columns:
+Policies:
 
-- `id` (text or uuid, PK)
-- `created_at` (timestamptz)
-- `user_id` (uuid)
-- `user_email` (text)
-- `vehicle` (jsonb)
-- `issue_description` (text)
-- `contact` (jsonb)
-- `status` (text)
-- `assigned_mechanic_id` (uuid, nullable)
-- `assigned_mechanic_email` (text, nullable)
-- `notes` (jsonb array, optional)
+- **User insert**: authenticated users can `INSERT` requests only when `user_id = auth.uid()`
+- **User read**: authenticated users can `SELECT` their own requests (`user_id = auth.uid()`)
+- **User update**: authenticated users can `UPDATE` their own requests (`user_id = auth.uid()`)
 
-### `fees` table (optional)
+Mechanic/admin access for the mechanic portal/admin panel:
 
-Recommended columns:
+- **Mechanic read**: mechanics can `SELECT` requests
+- **Mechanic update**: mechanics can `UPDATE` requests that are either:
+  - unassigned (`assigned_mechanic_id is null`) to allow accepting, OR
+  - assigned to them (`assigned_mechanic_id = auth.uid()`)
 
-- `id` (text, PK) — the app uses `"default"`
-- `base_fee` (numeric)
-- `per_mile` (numeric)
-- `after_hours_multiplier` (numeric)
+- **Admin read**: admins can `SELECT` all requests
+- **Admin update**: admins can `UPDATE` all requests
+
+## Supabase Dashboard configuration (required)
+
+IMPORTANT: Supabase Configuration Required
+
+1. In Supabase Dashboard:
+   - Go to **Authentication → URL Configuration**
+   - Set **Site URL** to your production domain (e.g., `https://yourapp.com`)
+   - Add **Redirect URLs**:
+     - `http://localhost:3000/**` (user website dev)
+     - `http://localhost:3001/**` (mechanic portal dev)
+     - `http://localhost:3002/**` (admin panel dev)
+     - `https://yourapp.com/**` (prod; adjust per deployment)
+
+2. Email templates (optional):
+   - Authentication → Email Templates
+   - Use `SiteURL` and `RedirectTo` template variables
 
 ## Mock mode
 
