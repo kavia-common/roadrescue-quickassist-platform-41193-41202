@@ -1,19 +1,42 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
+import { MapView } from "../components/MapView";
 import { dataService } from "../services/dataService";
+
+function parseNumberOrNull(v) {
+  const t = String(v ?? "").trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
 
 // PUBLIC_INTERFACE
 export function SubmitRequestPage({ user }) {
-  /** Form to submit a new breakdown request. */
+  /** Form to submit a new breakdown request (now includes a map preview for the selected coords). */
   const navigate = useNavigate();
   const [vehicle, setVehicle] = useState({ make: "", model: "", year: "", plate: "" });
   const [issueDescription, setIssueDescription] = useState("");
   const [contact, setContact] = useState({ name: "", phone: "" });
+
+  // Simple location capture: a text hint + optional coordinates.
+  // Chennai is the default map center when coords are not provided.
+  const [locationText, setLocationText] = useState("");
+  const [latText, setLatText] = useState("");
+  const [lngText, setLngText] = useState("");
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const parsedLat = useMemo(() => parseNumberOrNull(latText), [latText]);
+  const parsedLng = useMemo(() => parseNumberOrNull(lngText), [lngText]);
+
+  const marker = useMemo(() => {
+    if (parsedLat == null || parsedLng == null) return null;
+    return { lat: parsedLat, lng: parsedLng };
+  }, [parsedLat, parsedLng]);
 
   const validate = () => {
     if (!vehicle.make.trim()) return "Vehicle make is required.";
@@ -21,6 +44,15 @@ export function SubmitRequestPage({ user }) {
     if (!issueDescription.trim()) return "Issue description is required.";
     if (!contact.name.trim()) return "Contact name is required.";
     if (!contact.phone.trim()) return "Contact phone is required.";
+
+    // Coordinates are optional; if one is provided, require both and validate ranges.
+    const hasLat = String(latText).trim().length > 0;
+    const hasLng = String(lngText).trim().length > 0;
+    if (hasLat || hasLng) {
+      if (parsedLat == null || parsedLng == null) return "Please enter valid latitude and longitude numbers.";
+      if (parsedLat < -90 || parsedLat > 90) return "Latitude must be between -90 and 90.";
+      if (parsedLng < -180 || parsedLng > 180) return "Longitude must be between -180 and 180.";
+    }
     return "";
   };
 
@@ -32,7 +64,12 @@ export function SubmitRequestPage({ user }) {
 
     setBusy(true);
     try {
+      // Persisting of location is intentionally not wired into the data layer here,
+      // because the current request schema in this repo does not include location fields.
+      // This change adds a UI map preview for the request flow and mechanic detail view.
       const req = await dataService.createRequest({ user, vehicle, issueDescription, contact });
+
+      // In mock mode, the UI could extend local storage later; for now we navigate as usual.
       navigate(`/requests/${req.id}`);
     } catch (err) {
       setError(err.message || "Could not submit request.");
@@ -45,10 +82,10 @@ export function SubmitRequestPage({ user }) {
     <div className="container">
       <div className="hero">
         <h1 className="h1">Submit a breakdown request</h1>
-        <p className="lead">Tell us what happened. A mechanic will review and accept it.</p>
+        <p className="lead">Tell us what happened and where you are. A mechanic will review and accept it.</p>
       </div>
 
-      <Card title="Request details" subtitle="No maps/AI—manual details only.">
+      <Card title="Request details" subtitle="OpenStreetMap preview (default center: Chennai).">
         <form onSubmit={submit} className="form">
           <div className="grid2">
             <Input
@@ -111,6 +148,49 @@ export function SubmitRequestPage({ user }) {
               required
             />
           </div>
+
+          <div className="divider" />
+
+          <div className="grid2">
+            <Input
+              label="Location / landmark"
+              name="locationText"
+              value={locationText}
+              onChange={(e) => setLocationText(e.target.value)}
+              placeholder="e.g., Near Anna Nagar Tower Park"
+              hint="Optional: add a short landmark or area name."
+            />
+            <div />
+            <Input
+              label="Latitude"
+              name="latitude"
+              value={latText}
+              onChange={(e) => setLatText(e.target.value)}
+              placeholder="e.g., 13.0827"
+              hint="Optional. If provided, longitude is required too."
+            />
+            <Input
+              label="Longitude"
+              name="longitude"
+              value={lngText}
+              onChange={(e) => setLngText(e.target.value)}
+              placeholder="e.g., 80.2707"
+              hint="Optional. If provided, latitude is required too."
+            />
+          </div>
+
+          <MapView
+            center={marker || undefined}
+            marker={marker || undefined}
+            height={280}
+            ariaLabel="Selected location map"
+          />
+
+          {locationText.trim() ? (
+            <div className="hint" style={{ marginTop: -6 }}>
+              Location note: <strong>{locationText.trim()}</strong>
+            </div>
+          ) : null}
 
           {error ? <div className="alert alert-error">{error}</div> : null}
 
