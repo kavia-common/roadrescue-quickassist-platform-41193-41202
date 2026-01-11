@@ -1,0 +1,16 @@
+{
+  "name": "roadrescue-quickassist-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Workspace scripts for running RoadRescue – QuickAssist frontends together.",
+  "scripts": {
+    "postinstall": "npm --prefix roadrescue-quickassist-platform-41193-41202/frontend_user_website install",
+    "install:frontends": "npm --prefix roadrescue-quickassist-platform-41193-41202/frontend_user_website install && npm --prefix roadrescue-quickassist-platform-41193-41204/frontend_mechanic_portal install && npm --prefix roadrescue-quickassist-platform-41193-41203/frontend_admin_panel install",
+    "build:user": "npm --prefix roadrescue-quickassist-platform-41193-41202/frontend_user_website run build",
+    "start:all": "npm run install:frontends && concurrently -k --handle-input --names \"user,mechanic,admin\" --prefix \"[{name}]\" --prefix-colors \"blue,yellow,magenta\" \"cross-env PORT=3000 npm --prefix roadrescue-quickassist-platform-41193-41202/frontend_user_website start\" \"cross-env PORT=3001 npm --prefix roadrescue-quickassist-platform-41193-41204/frontend_mechanic_portal start\" \"cross-env PORT=3002 npm --prefix roadrescue-quickassist-platform-41193-41203/frontend_admin_panel start\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "cross-env": "^7.0.3"
+  }
+}
