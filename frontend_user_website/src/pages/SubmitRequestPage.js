@@ -263,7 +263,15 @@ export function SubmitRequestPage({ user }) {
             </div>
           ) : null}
 
-          {canShowMap ? <LocationMap lat={lat} lon={lon} address={displayAddress || ""} height={300} /> : null}
+          {canShowMap ? (
+            <div
+              onWheel={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+            >
+              <LocationMap lat={lat} lon={lon} address={displayAddress || ""} height={300} />
+            </div>
+          ) : null}
 
           {error ? <div className="alert alert-error">{error}</div> : null}
 

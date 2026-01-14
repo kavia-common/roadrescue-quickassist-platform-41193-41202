@@ -119,7 +119,15 @@ export function RequestDetailPage({ user }) {
           </div>
         )}
 
-        {canShowMap ? <LocationMap lat={req.lat} lon={req.lon} address={req.address || ""} height={300} /> : null}
+        {canShowMap ? (
+          <div
+            onWheel={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
+            <LocationMap lat={req.lat} lon={req.lon} address={req.address || ""} height={300} />
+          </div>
+        ) : null}
       </Card>
 
       <Card title="Issue description">

@@ -95,7 +95,11 @@ export function LocationMap({ lat, lon, address = "", height = 300 }) {
           center={center || [CHENNAI_CENTER.lat, CHENNAI_CENTER.lon]}
           zoom={15}
           style={{ height: `${height}px`, width: "100%" }}
-          scrollWheelZoom={false}
+          scrollWheelZoom={true}
+          dragging={true}
+          touchZoom={true}
+          doubleClickZoom={true}
+          zoomControl={true}
           whenCreated={setMap}
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
