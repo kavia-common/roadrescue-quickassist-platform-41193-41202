@@ -8,17 +8,19 @@ User-facing website for submitting and tracking vehicle breakdown requests.
 - Submit Request (vehicle + issue + contact)
 - My Requests list and Request detail view
 
-## Auth & Data
+## Auth & Data (Supabase-only)
 
-This app supports two modes:
+This app uses **Supabase directly from the browser** for:
 
-1. **Supabase mode** (recommended): if `REACT_APP_SUPABASE_URL` and `REACT_APP_SUPABASE_KEY` are set, auth uses `supabase.auth` and data is persisted in Supabase tables.
-2. **Mock mode** (default): if env vars are missing/empty, the app uses `localStorage` with seeded demo users and requests.
+- Authentication (`supabase.auth.getUser`, `onAuthStateChange`, OAuth)
+- User profile (`public.profiles`)
+- Requests (`public.requests`)
 
-Demo accounts (mock mode):
+### Required environment variables
 
-- `user@example.com` / `password123`
-- `mech@example.com` / `password123`
-- `admin@example.com` / `password123`
+- `REACT_APP_SUPABASE_URL`
+- `REACT_APP_SUPABASE_ANON_KEY`
 
-See `../assets/supabase.md` for suggested table schemas.
+If these are missing, the app will fail fast with a clear error (mock/demo mode has been removed).
+
+See `../assets/supabase.md` for suggested table schemas and RLS notes.

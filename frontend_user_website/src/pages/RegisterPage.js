@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
@@ -15,8 +15,6 @@ export function RegisterPage({ onAuthed }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [oauthBusy, setOauthBusy] = useState(false);
-
-  const supabaseEnabled = useMemo(() => dataService.isSupabaseConfigured(), []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -57,7 +55,7 @@ export function RegisterPage({ onAuthed }) {
 
       <Card
         title="Register"
-        subtitle="Email/password auth (Supabase if configured; otherwise local demo)."
+        subtitle="Create a real account with Supabase auth."
         actions={
           <Link className="link" to="/login">
             Back to login
@@ -65,14 +63,9 @@ export function RegisterPage({ onAuthed }) {
         }
       >
         <div className="form" style={{ marginBottom: 12 }}>
-          <Button variant="ghost" disabled={!supabaseEnabled || oauthBusy || busy} onClick={signInWithGoogle} style={{ width: "100%" }}>
+          <Button variant="ghost" disabled={oauthBusy || busy} onClick={signInWithGoogle} style={{ width: "100%" }}>
             {oauthBusy ? "Redirecting to Google…" : "Continue with Google"}
           </Button>
-          {!supabaseEnabled ? (
-            <div className="hint">
-              Google sign-in requires Supabase mode. Set <code>REACT_APP_SUPABASE_URL</code> and <code>REACT_APP_SUPABASE_KEY</code>.
-            </div>
-          ) : null}
           <div className="divider" style={{ margin: "6px 0 0" }} />
         </div>
 

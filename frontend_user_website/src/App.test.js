@@ -3,5 +3,7 @@ import App from "./App";
 
 test("renders brand name", () => {
   render(<App />);
-  expect(screen.getByText(/RoadRescue/i)).toBeInTheDocument();
+  // Brand is a link in the navbar; avoid matching footer text too.
+  const brandLink = screen.getByRole("link", { name: /RoadRescue/i });
+  expect(brandLink).toBeInTheDocument();
 });

@@ -45,7 +45,7 @@ async function parseTwilioError(response) {
 
 // PUBLIC_INTERFACE
 export function TwilioSmsDemoCard({ title = "SMS Demo", defaultTo = "" }) {
-  /** Demo card that simulates the mocked "mechanic accepts job" event by sending an SMS via Twilio. */
+  /** Demo card that simulates the "mechanic accepts job" event by sending an SMS via Twilio. */
   const [to, setTo] = useState(defaultTo);
   const [body, setBody] = useState("Your RoadRescue job has been accepted by a mechanic.");
   const [status, setStatus] = useState({ type: "", message: "" }); // type: success|error|info
@@ -102,7 +102,7 @@ export function TwilioSmsDemoCard({ title = "SMS Demo", defaultTo = "" }) {
       const resp = await fetch(url, {
         method: "POST",
         headers: {
-          "Authorization": `Basic ${basic}`,
+          Authorization: `Basic ${basic}`,
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         },
         body: form.toString(),

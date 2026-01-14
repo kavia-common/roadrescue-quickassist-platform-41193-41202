@@ -1,450 +1,385 @@
 import { normalizeStatus } from "./statusUtils";
-import { supabase, isSupabaseConfigured as isSupabaseConfiguredClient } from "./supabaseClient";
+import { getSupabase } from "./supabaseClient";
+import { appConfig } from "../config/appConfig";
+import { withTimeout } from "../utils/withTimeout";
 
-const LS_KEYS = {
-  session: "rrqa.session",
-  users: "rrqa.users",
-  requests: "rrqa.requests",
-  fees: "rrqa.fees",
-  seeded: "rrqa.seeded",
-};
-
-function uid(prefix = "id") {
-  return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
-}
-
-function readJson(key, fallback) {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(key, value) {
-  window.localStorage.setItem(key, JSON.stringify(value));
-}
-
-function ensureSeedData() {
-  const seeded = readJson(LS_KEYS.seeded, false);
-  if (seeded) return;
-
-  const users = [
-    { id: uid("u"), email: "user@example.com", password: "password123", role: "user", approved: true },
-    { id: uid("m"), email: "mech@example.com", password: "password123", role: "mechanic", approved: false, profile: { name: "Alex Mechanic", serviceArea: "Downtown" } },
-    { id: uid("a"), email: "admin@example.com", password: "password123", role: "admin", approved: true },
-  ];
-
-  const now = new Date().toISOString();
-  const requests = [
-    {
-      id: uid("req"),
-      createdAt: now,
-      userId: users[0].id,
-      userEmail: users[0].email,
-      vehicle: { make: "Toyota", model: "Corolla", year: "2016", plate: "ABC-123" },
-      issueDescription: "Car won't start, clicking noise.",
-      contact: { name: "Sam Driver", phone: "555-0101" },
-      status: "Submitted",
-      assignedMechanicId: null,
-      assignedMechanicEmail: null,
-      notes: [],
-    },
-    {
-      id: uid("req"),
-      createdAt: now,
-      userId: users[0].id,
-      userEmail: users[0].email,
-      vehicle: { make: "Honda", model: "Civic", year: "2018", plate: "XYZ-987" },
-      issueDescription: "Flat tire on rear left.",
-      contact: { name: "Sam Driver", phone: "555-0101" },
-      status: "In Review",
-      assignedMechanicId: null,
-      assignedMechanicEmail: null,
-      notes: [],
-    },
-  ];
-
-  writeJson(LS_KEYS.users, users);
-  writeJson(LS_KEYS.requests, requests);
-  writeJson(LS_KEYS.fees, { baseFee: 25, perMile: 2.0, afterHoursMultiplier: 1.25 });
-  writeJson(LS_KEYS.seeded, true);
-}
-
-function getLocalSession() {
-  return readJson(LS_KEYS.session, null);
-}
-
-function setLocalSession(session) {
-  writeJson(LS_KEYS.session, session);
-}
-
-function clearLocalSession() {
-  window.localStorage.removeItem(LS_KEYS.session);
-}
-
-function getLocalUsers() {
-  return readJson(LS_KEYS.users, []);
-}
-
-function setLocalUsers(users) {
-  writeJson(LS_KEYS.users, users);
-}
-
-function getLocalRequests() {
-  return readJson(LS_KEYS.requests, []);
-}
-
-function setLocalRequests(reqs) {
-  writeJson(LS_KEYS.requests, reqs);
-}
-
-// PUBLIC_INTERFACE
-function isSupabaseConfigured() {
-  /** Returns true only when required REACT_APP_ Supabase env vars are present (React build-time). */
-  return isSupabaseConfiguredClient();
-}
-
-function getSupabase() {
-  // Use shared singleton client. If env vars missing, this is null (mock mode).
-  return supabase;
-}
-
-async function supaGetUserRole(supa, userId, email) {
-  // Minimal role table assumption: public.profiles(id uuid primary key, email text, role text, approved boolean)
-  // If not present, default to "user".
-  try {
-    const { data, error } = await supa.from("profiles").select("role,approved").eq("id", userId).maybeSingle();
-    if (error) return { role: "user", approved: true };
-    if (!data) {
-      await supa.from("profiles").insert({ id: userId, email, role: "user", approved: true });
-      return { role: "user", approved: true };
-    }
-    return { role: data.role || "user", approved: data.approved ?? true };
-  } catch {
-    return { role: "user", approved: true };
-  }
-}
-
+/**
+ * Convert a Supabase auth user into the minimal "app user" shape expected by the UI.
+ * Also attempts to read role/approved from public.profiles, but never blocks UX if that fails.
+ */
 async function supaUserToAppUser(supaUser) {
   if (!supaUser) return null;
-  const supa = getSupabase();
-  if (!supa) return null;
-  const roleInfo = await supaGetUserRole(supa, supaUser.id, supaUser.email);
-  return { id: supaUser.id, email: supaUser.email, role: roleInfo.role, approved: roleInfo.approved };
+
+  const supabase = getSupabase();
+
+  // Default role/approval if profiles table isn't configured or RLS blocks.
+  let role = "user";
+  let approved = true;
+
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role,approved")
+      .eq("id", supaUser.id)
+      .maybeSingle();
+
+    if (!error && data) {
+      role = data.role || "user";
+      approved = data.approved ?? true;
+    } else if (!error && !data) {
+      // Best-effort bootstrap: create a profiles row if missing.
+      await supabase.from("profiles").insert({
+        id: supaUser.id,
+        email: supaUser.email,
+        role: "user",
+        approved: true,
+      });
+    }
+  } catch {
+    // ignore
+  }
+
+  return { id: supaUser.id, email: supaUser.email, role, approved };
+}
+
+function normalizeVehicle(vehicle, row) {
+  let v = vehicle;
+  if (!v || typeof v !== "object") {
+    v = {};
+    if (row?.vehicle_make) v.make = row.vehicle_make;
+    if (row?.vehicle_model) v.model = row.vehicle_model;
+    if (!v.make && typeof row?.vehicle === "string") {
+      const parts = row.vehicle.split(" ");
+      v.make = parts[0] || "";
+      v.model = parts[1] || "";
+    }
+  }
+  return {
+    make: typeof v.make === "string" ? v.make : "",
+    model: typeof v.model === "string" ? v.model : "",
+  };
+}
+
+function normalizeContact(contact, row) {
+  let c = contact;
+  if (!c || typeof c !== "object") {
+    c = {};
+    if (row?.contact_name) c.name = row.contact_name;
+    if (row?.contact_phone) c.phone = row.contact_phone;
+    if (!c.name && typeof row?.contact === "string") c.name = row.contact;
+  }
+  return {
+    name: typeof c.name === "string" ? c.name : "",
+    phone: typeof c.phone === "string" ? c.phone : "",
+  };
 }
 
 /*
   FIELD MAPPING NOTES (MUST BE IDENTICAL ACROSS ALL 3 FRONTENDS/SERVICES)
 
-  UI form fields (local): {vehicle: {make, model, year, plate}, contact: {name, phone}, issueDescription}
+  UI form fields (local): {vehicle: {make, model}, contact: {name, phone}, issueDescription}
   Supabase DB columns (requests):
-    - vehicle (jsonb: {make, model, year, plate}),
-    - contact (jsonb: {name, phone}),
+    - vehicle (jsonb: {make, model, ...}),
+    - contact (jsonb: {name, phone, ...}),
     - user_email,
     - assigned_mechanic_email,
     - notes (jsonb array),
     - status (text),
-    - id (db-generated UUID or provided string for local),
+    - id (uuid or text),
     - created_at (timestamp),
     - user_id (uuid),
     - assigned_mechanic_id (uuid, nullable).
 
-  - When reading, always reconstruct {vehicle} and {contact} if only primitives are present or if data is stringified.
-  - When writing, always persist {vehicle} and {contact} as jsonb to Supabase.
-  - If future backends provide only separate fields, include non-breaking fallback to recompose.
-  - "vehicle" UI display: "${vehicle.make} ${vehicle.model} ${vehicle.year}" (never expect a single vehiclestring column unless legacy).
-  - "contact" UI display: "${contact.name} (${contact.phone})"
-  - Omit "id" on insert in Supabase mode; let Supabase assign. Always set status="open" on submit, leave assignments/mechanic UUIDs null unless set.
-
-  These rules ensure consistent field display/persistence across User Website, Mechanic Portal, and Admin Panel.
-
+  - When reading, always normalize vehicle to {make, model} and contact to {name, phone}.
+  - When writing, always persist vehicle/contact as jsonb.
+  - Always set status="open" on create.
 */
+
+function normalizeSupabaseAuthError(err) {
+  // Supabase errors can vary by provider/settings. We keep the UI message clear.
+  const raw = String(err?.message || "").trim();
+  const lower = raw.toLowerCase();
+
+  if (!raw) return "Authentication failed.";
+
+  // Common cases:
+  if (lower.includes("invalid login credentials")) return "Invalid email or password.";
+  if (lower.includes("email not confirmed") || lower.includes("confirm your email")) {
+    return "Please confirm your email address before signing in.";
+  }
+  if (lower.includes("too many requests")) return "Too many attempts. Please wait a moment and try again.";
+
+  return raw;
+}
+
 // PUBLIC_INTERFACE
 export const dataService = {
-  /** Data access facade: uses Supabase when configured; otherwise localStorage mock. */
+  /** Supabase-only data access facade (no mock/demo/localStorage). */
 
   // PUBLIC_INTERFACE
   async register(email, password) {
-    ensureSeedData();
-    const supa = getSupabase();
-    if (supa) {
-      const { data, error } = await supa.auth.signUp({ email, password });
-      if (error) throw new Error(error.message);
-      // When email confirmation is enabled, user might be null; still return.
-      const user = data.user;
-      if (user) {
-        const roleInfo = await supaGetUserRole(supa, user.id, email);
-        return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
-      }
-      return { id: "pending", email, role: "user", approved: true };
-    }
+    const supabase = getSupabase();
+    try {
+      const res = await withTimeout(supabase.auth.signUp({ email, password }), appConfig.bootTimeoutMs, "Sign up");
 
-    const users = getLocalUsers();
-    if (users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-      throw new Error("Email already registered.");
+      const { data, error } = res;
+      if (error) throw error;
+
+      // When email confirmation is enabled, user may be null initially.
+      if (!data?.user) return { id: "pending", email, role: "user", approved: true };
+      return supaUserToAppUser(data.user);
+    } catch (e) {
+      throw new Error(normalizeSupabaseAuthError(e));
     }
-    const user = { id: uid("u"), email, password, role: "user", approved: true };
-    setLocalUsers([user, ...users]);
-    setLocalSession({ userId: user.id });
-    return { id: user.id, email: user.email, role: user.role, approved: user.approved };
   },
 
   // PUBLIC_INTERFACE
   async login(email, password) {
-    ensureSeedData();
-    const supa = getSupabase();
-    if (supa) {
-      const { data, error } = await supa.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
-      const user = data.user;
-      const roleInfo = await supaGetUserRole(supa, user.id, user.email);
-      return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
-    }
+    const supabase = getSupabase();
+    try {
+      const res = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        appConfig.bootTimeoutMs,
+        "Sign in"
+      );
 
-    const users = getLocalUsers();
-    const match = users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-    if (!match) throw new Error("Invalid email or password.");
-    setLocalSession({ userId: match.id });
-    return { id: match.id, email: match.email, role: match.role, approved: match.approved };
+      const { data, error } = res;
+      if (error) throw error;
+
+      // In normal password flow, Supabase returns user immediately on success.
+      // Still guard to avoid downstream null derefs.
+      if (!data?.user) throw new Error("Sign-in succeeded but no user was returned.");
+      return supaUserToAppUser(data.user);
+    } catch (e) {
+      throw new Error(normalizeSupabaseAuthError(e));
+    }
   },
 
   // PUBLIC_INTERFACE
   async loginWithGoogle({ redirectTo } = {}) {
-    /** Starts Supabase OAuth sign-in with Google (Supabase mode only). */
-    const supa = getSupabase();
-    if (!supa) {
-      throw new Error("Supabase is not configured. Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_KEY to enable Google sign-in.");
-    }
-
+    /** Starts Supabase OAuth sign-in with Google (Supabase mode). */
+    const supabase = getSupabase();
     const finalRedirect = redirectTo || window.location.origin;
 
-    const { error } = await supa.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: finalRedirect,
-      },
+      options: { redirectTo: finalRedirect },
     });
 
-    // On success the browser will redirect away; if we get here, it either errored or popup-based flows.
     if (error) throw new Error(error.message);
     return true;
   },
 
   // PUBLIC_INTERFACE
   async logout() {
-    const supa = getSupabase();
-    if (supa) {
-      await supa.auth.signOut();
-      return;
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.warn("Supabase signOut error:", error.message);
     }
-    clearLocalSession();
+  },
+
+  // PUBLIC_INTERFACE
+  async getUserFromSession() {
+    /**
+     * Returns current authenticated user or null using `supabase.auth.getSession()`.
+     *
+     * Why session-first:
+     * - Recommended for app boot: it reads the cached session quickly
+     * - Avoids some edge cases where getUser can hang during initialization in preview environments
+     */
+    const supabase = getSupabase();
+    const { data, error } = await supabase.auth.getSession();
+    if (error) return null;
+
+    const u = data?.session?.user;
+    if (!u) return null;
+    return supaUserToAppUser(u);
   },
 
   // PUBLIC_INTERFACE
   async getCurrentUser() {
-    ensureSeedData();
-    const supa = getSupabase();
-    if (supa) {
-      const { data } = await supa.auth.getUser();
-      const user = data?.user;
-      if (!user) return null;
-      const roleInfo = await supaGetUserRole(supa, user.id, user.email);
-      return { id: user.id, email: user.email, role: roleInfo.role, approved: roleInfo.approved };
-    }
-
-    const session = getLocalSession();
-    if (!session?.userId) return null;
-    const users = getLocalUsers();
-    const u = users.find((x) => x.id === session.userId);
+    /** Returns current authenticated user or null. */
+    const supabase = getSupabase();
+    const { data, error } = await supabase.auth.getUser();
+    if (error) return null;
+    const u = data?.user;
     if (!u) return null;
-    return { id: u.id, email: u.email, role: u.role, approved: u.approved, profile: u.profile };
+    return supaUserToAppUser(u);
   },
 
   // PUBLIC_INTERFACE
   subscribeToAuthChanges(onUserChanged) {
-    /**
-     * Subscribe to Supabase auth state changes.
+    /** Subscribe to Supabase auth state changes; returns unsubscribe.
      *
-     * Returns an unsubscribe function.
-     * No-op in mock mode.
+     * IMPORTANT: Must not block UI transitions.
+     * Some environments/RLS configurations can make profile lookups slow or fail.
+     * We emit a minimal user immediately, then enrich role/approved in the background.
      */
-    const supa = getSupabase();
-    if (!supa) return () => {};
+    const supabase = getSupabase();
 
     const {
       data: { subscription },
-    } = supa.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        const next = session?.user ? await supaUserToAppUser(session.user) : null;
-        onUserChanged?.(next);
-      } catch {
-        // If role/profile fetch fails, still set basic identity to avoid blocking UX.
-        onUserChanged?.(
-          session?.user
-            ? { id: session.user.id, email: session.user.email, role: "user", approved: true }
-            : null
-        );
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const rawUser = session?.user || null;
+
+      if (!rawUser) {
+        onUserChanged?.(null);
+        return;
       }
+
+      // Emit immediately so auth state resolves without waiting on DB/RLS.
+      const basicUser = { id: rawUser.id, email: rawUser.email, role: "user", approved: true };
+      onUserChanged?.(basicUser);
+
+      // Best-effort enrichment (async, non-blocking).
+      (async () => {
+        try {
+          const enriched = await supaUserToAppUser(rawUser);
+          // Only emit if enrichment produced something meaningful.
+          if (enriched) onUserChanged?.(enriched);
+        } catch {
+          // Ignore enrichment errors; basic user is already emitted.
+        }
+      })();
     });
 
     return () => subscription?.unsubscribe?.();
   },
 
   // PUBLIC_INTERFACE
-  async listRequests({ forUserId } = {}) {
-    ensureSeedData();
-    const supa = getSupabase();
-    if (supa) {
-      const q = supa.from("requests").select("*").order("created_at", { ascending: false });
-      const res = forUserId ? await q.eq("user_id", forUserId) : await q;
-      if (res.error) throw new Error(res.error.message);
-      return (res.data || []).map((r) => {
-        // Defensive handling for "vehicle" and "contact" - ENFORCED: 'vehicle' is always normalized to {make,model}
-        let vehicle = r.vehicle;
-        if (!vehicle || typeof vehicle !== "object") {
-          vehicle = {};
-          if (r.vehicle_make) vehicle.make = r.vehicle_make;
-          if (r.vehicle_model) vehicle.model = r.vehicle_model;
-          // Legacy fallback: parse space-separated string
-          if (!vehicle.make && typeof r.vehicle === "string") {
-            const parts = r.vehicle.split(" ");
-            vehicle.make = parts[0] || "";
-            vehicle.model = parts[1] || "";
-          }
-        }
-        // Only expose 'make' and 'model' keys; guaranteed present for UI
-        vehicle = {
-          make: typeof vehicle.make === "string" ? vehicle.make : "",
-          model: typeof vehicle.model === "string" ? vehicle.model : "",
-        };
-        // Defensive for contact
-        let contact = r.contact;
-        if (!contact || typeof contact !== "object") {
-          contact = {};
-          if (r.contact_name) contact.name = r.contact_name;
-          if (r.contact_phone) contact.phone = r.contact_phone;
-          if (!contact.name && typeof r.contact === "string") contact.name = r.contact;
-        }
-        return {
-          id: r.id,
-          createdAt: r.created_at,
-          userId: r.user_id,
-          userEmail: r.user_email,
-          vehicle,
-          issueDescription: r.issue_description,
-          contact,
-          status: normalizeStatus(r.status),
-          assignedMechanicId: r.assigned_mechanic_id,
-          assignedMechanicEmail: r.assigned_mechanic_email,
-          notes: r.notes || [],
-        };
-      });
-    }
+  async getProfile(userId) {
+    /** Returns profile row from public.profiles. */
+    const supabase = getSupabase();
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error("Profile not found.");
+    return {
+      id: data.id,
+      email: data.email || "",
+      role: data.role || "user",
+      approved: data.approved ?? true,
+      profile: data.profile || {},
+    };
+  },
 
-    const all = getLocalRequests();
-    return (forUserId ? all.filter((r) => r.userId === forUserId) : all).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // PUBLIC_INTERFACE
+  async listRequests({ forUserId } = {}) {
+    const supabase = getSupabase();
+    const q = supabase.from("requests").select("*").order("created_at", { ascending: false });
+    const res = forUserId ? await q.eq("user_id", forUserId) : await q;
+    if (res.error) throw new Error(res.error.message);
+
+    return (res.data || []).map((r) => ({
+      id: r.id,
+      createdAt: r.created_at,
+      userId: r.user_id,
+      userEmail: r.user_email,
+      vehicle: normalizeVehicle(r.vehicle, r),
+      issueDescription: r.issue_description,
+      contact: normalizeContact(r.contact, r),
+      status: normalizeStatus(r.status),
+      assignedMechanicId: r.assigned_mechanic_id,
+      assignedMechanicEmail: r.assigned_mechanic_email,
+      notes: r.notes || [],
+      lat: typeof r.lat === "number" ? r.lat : r.lat != null ? Number(r.lat) : null,
+      lon: typeof r.lon === "number" ? r.lon : r.lon != null ? Number(r.lon) : null,
+      address: typeof r.address === "string" ? r.address : "",
+    }));
   },
 
   // PUBLIC_INTERFACE
   async getRequestById(requestId) {
-    const list = await this.listRequests();
-    return list.find((r) => r.id === requestId) || null;
+    const supabase = getSupabase();
+    const { data, error } = await supabase.from("requests").select("*").eq("id", requestId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      createdAt: data.created_at,
+      userId: data.user_id,
+      userEmail: data.user_email,
+      vehicle: normalizeVehicle(data.vehicle, data),
+      issueDescription: data.issue_description,
+      contact: normalizeContact(data.contact, data),
+      status: normalizeStatus(data.status),
+      assignedMechanicId: data.assigned_mechanic_id,
+      assignedMechanicEmail: data.assigned_mechanic_email,
+      notes: data.notes || [],
+      lat: typeof data.lat === "number" ? data.lat : data.lat != null ? Number(data.lat) : null,
+      lon: typeof data.lon === "number" ? data.lon : data.lon != null ? Number(data.lon) : null,
+      address: typeof data.address === "string" ? data.address : "",
+    };
   },
 
   // PUBLIC_INTERFACE
-  async createRequest({ user, vehicle, issueDescription, contact }) {
-    ensureSeedData();
-    const supa = getSupabase();
+  async createRequest({ user, vehicle, issueDescription, contact, location } = {}) {
+    const supabase = getSupabase();
     const nowIso = new Date().toISOString();
 
-    // ENFORCED: Write vehicle as {make, model} ONLY for every create (ignore year/plate).
     const safeVehicle = {
       make: vehicle && typeof vehicle.make === "string" ? vehicle.make : "",
       model: vehicle && typeof vehicle.model === "string" ? vehicle.model : "",
     };
-    // Contact full, for UI/possible future
     const safeContact = {
       name: contact?.name || "",
       phone: contact?.phone || "",
     };
 
-    // Prep mock request for localStorage mode
-    const request = {
-      id: uid("req"),
-      createdAt: nowIso,
-      userId: user.id,
-      userEmail: user.email,
-      vehicle: safeVehicle, // only make/model is stored for "vehicle"
-      issueDescription,
+    const safeLat = typeof location?.lat === "number" && Number.isFinite(location.lat) ? location.lat : null;
+    const safeLon = typeof location?.lon === "number" && Number.isFinite(location.lon) ? location.lon : null;
+    const safeAddress = typeof location?.address === "string" ? location.address.trim() : "";
+
+    const insertPayload = {
+      created_at: nowIso,
+      user_id: user.id,
+      user_email: user.email,
+      vehicle: safeVehicle,
+      issue_description: issueDescription,
       contact: safeContact,
-      status: "Submitted",
-      assignedMechanicId: null,
-      assignedMechanicEmail: null,
+      status: "open",
+      assigned_mechanic_id: null,
+      assigned_mechanic_email: null,
       notes: [],
+
+      // NEW: address-based geocoding fields
+      lat: safeLat,
+      lon: safeLon,
+      address: safeAddress,
     };
 
-    if (supa) {
-      // Prepare payload for Supabase: vehicle={make,model}, status="open", omit id, only valid/null UUIDs, no custom fields.
-      const insertPayload = {
-        created_at: nowIso,
-        user_id: user.id,
-        user_email: user.email,
-        vehicle: safeVehicle,
-        issue_description: issueDescription,
-        contact: safeContact,
-        status: "open", // always open on create
-        assigned_mechanic_id: null,
-        assigned_mechanic_email: null,
-        notes: [],
-      };
-      // Use .select() to get server-inserted row for ID
-      const { data, error } = await supa.from("requests").insert(insertPayload).select().maybeSingle();
+    const { data, error } = await supabase.from("requests").insert(insertPayload).select().maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error("Failed to insert request.");
 
-      if (error) throw new Error(error.message);
-      if (!data) throw new Error("Failed to insert request.");
+    return {
+      id: data.id,
+      createdAt: data.created_at,
+      userId: data.user_id,
+      userEmail: data.user_email,
+      vehicle: normalizeVehicle(data.vehicle, data),
+      issueDescription: data.issue_description,
+      contact: normalizeContact(data.contact, data),
+      status: normalizeStatus(data.status),
+      assignedMechanicId: data.assigned_mechanic_id,
+      assignedMechanicEmail: data.assigned_mechanic_email,
+      notes: data.notes || [],
 
-      // Always normalize vehicle to {make,model} in UI state
-      let vehicleObj = data.vehicle;
-      if (!vehicleObj || typeof vehicleObj !== "object") {
-        vehicleObj = {};
-        if (data.vehicle_make) vehicleObj.make = data.vehicle_make;
-        if (data.vehicle_model) vehicleObj.model = data.vehicle_model;
-      }
-      vehicleObj = {
-        make: typeof vehicleObj.make === "string" ? vehicleObj.make : "",
-        model: typeof vehicleObj.model === "string" ? vehicleObj.model : "",
-      };
-      let contactObj = data.contact;
-      if (!contactObj || typeof contactObj !== "object") {
-        contactObj = {};
-        if (data.contact_name) contactObj.name = data.contact_name;
-        if (data.contact_phone) contactObj.phone = data.contact_phone;
-      }
-
-      return {
-        id: data.id,
-        createdAt: data.created_at,
-        userId: data.user_id,
-        userEmail: data.user_email,
-        vehicle: vehicleObj,
-        issueDescription: data.issue_description,
-        contact: contactObj,
-        status: data.status,
-        assignedMechanicId: data.assigned_mechanic_id,
-        assignedMechanicEmail: data.assigned_mechanic_email,
-        notes: data.notes || [],
-      };
-    }
-
-    // In mock mode, assign custom string ID.
-    const all = getLocalRequests();
-    setLocalRequests([request, ...all]);
-    return request;
+      // NEW: location fields
+      lat: typeof data.lat === "number" ? data.lat : data.lat != null ? Number(data.lat) : null,
+      lon: typeof data.lon === "number" ? data.lon : data.lon != null ? Number(data.lon) : null,
+      address: typeof data.address === "string" ? data.address : "",
+    };
   },
 
   // PUBLIC_INTERFACE
-  isSupabaseConfigured,
+  isSupabaseConfigured() {
+    /**
+     * Supabase-only app: returns true if env vars exist.
+     * (Does not attempt network calls.)
+     */
+    return true;
+  },
 };

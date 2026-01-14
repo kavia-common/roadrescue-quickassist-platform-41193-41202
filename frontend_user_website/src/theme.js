@@ -22,10 +22,4 @@ export const theme = {
   },
 };
 
-// PUBLIC_INTERFACE
-export function isSupabaseConfigured() {
-  /** Returns true when env vars exist (non-empty). */
-  const url = process.env.REACT_APP_SUPABASE_URL;
-  const key = process.env.REACT_APP_SUPABASE_KEY;
-  return Boolean(url && key);
-}
+

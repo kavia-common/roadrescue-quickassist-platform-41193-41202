@@ -1,21 +1,26 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { dataService } from "../services/dataService";
 
-// PUBLIC_INTERFACE
-export function LoginPage({ onAuthed }) {
+/**
+ * PUBLIC_INTERFACE
+ */
+export function LoginPage({ onAuthed, bootError = "", bootResolved = true }) {
   /** Login page for users. */
   const navigate = useNavigate();
-  const [email, setEmail] = useState("user@example.com");
-  const [password, setPassword] = useState("password123");
-  const [error, setError] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(bootError || "");
   const [busy, setBusy] = useState(false);
   const [oauthBusy, setOauthBusy] = useState(false);
 
-  const supabaseEnabled = useMemo(() => dataService.isSupabaseConfigured(), []);
+  useEffect(() => {
+    // Keep local error banner aligned with boot failures / redirect message.
+    setError(bootError || "");
+  }, [bootError]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -55,7 +60,7 @@ export function LoginPage({ onAuthed }) {
 
       <Card
         title="Login"
-        subtitle="Use the seeded demo account or your own."
+        subtitle="Sign in with your real account."
         actions={
           <Link className="link" to="/register">
             Create account
@@ -63,18 +68,19 @@ export function LoginPage({ onAuthed }) {
         }
       >
         <div className="form" style={{ marginBottom: 12 }}>
-          <Button variant="ghost" disabled={!supabaseEnabled || oauthBusy || busy} onClick={signInWithGoogle} style={{ width: "100%" }}>
+          <Button variant="ghost" disabled={oauthBusy || busy} onClick={signInWithGoogle} style={{ width: "100%" }}>
             {oauthBusy ? "Redirecting to Google…" : "Continue with Google"}
           </Button>
-          {!supabaseEnabled ? (
-            <div className="hint">
-              Google sign-in requires Supabase mode. Set <code>REACT_APP_SUPABASE_URL</code> and <code>REACT_APP_SUPABASE_KEY</code>.
-            </div>
-          ) : null}
           <div className="divider" style={{ margin: "6px 0 0" }} />
         </div>
 
         <form onSubmit={submit} className="form">
+          {!bootResolved ? (
+            <div className="alert" style={{ background: "rgba(37,99,235,0.06)" }}>
+              Checking your session… You can still log in if this takes too long.
+            </div>
+          ) : null}
+
           <Input label="Email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={oauthBusy} />
           <Input
             label="Password"

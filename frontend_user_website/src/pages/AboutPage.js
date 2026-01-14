@@ -1,11 +1,9 @@
 import React from "react";
 import { Card } from "../components/ui/Card";
-import { isSupabaseConfigured } from "../theme";
 
 // PUBLIC_INTERFACE
 export function AboutPage() {
   /** About/auth/data notes. */
-  const supa = isSupabaseConfigured();
 
   return (
     <div className="container">
@@ -14,20 +12,18 @@ export function AboutPage() {
         <p className="lead">Manual dashboards and forms—no maps, AI, or external location APIs.</p>
       </div>
 
-      <Card title="Auth & data mode" subtitle={supa ? "Supabase mode detected." : "Mock mode detected (localStorage)."}>
+      <Card title="Auth & data" subtitle="Supabase-only mode">
         <ul className="list">
           <li>
-            <strong>Supabase configured:</strong> uses <code>supabase.auth</code> and reads/writes tables (<code>profiles</code>, <code>requests</code>) when available.
+            Authentication uses <code>supabase.auth</code> from <code>@supabase/supabase-js</code>.
           </li>
           <li>
-            <strong>Supabase not configured:</strong> uses <code>localStorage</code> with seeded demo users and requests.
+            Requests are read/written directly via Supabase tables (<code>profiles</code>, <code>requests</code>).
           </li>
-          <li>
-            Demo accounts (mock): <code>user@example.com</code>, <code>mech@example.com</code>, <code>admin@example.com</code> (password: <code>password123</code>).
-          </li>
+          <li>No demo users or offline/localStorage mock mode is included.</li>
         </ul>
         <div className="note">
-          Configure <code>REACT_APP_SUPABASE_URL</code> and <code>REACT_APP_SUPABASE_KEY</code> in the environment to enable Supabase.
+          Required env vars: <code>REACT_APP_SUPABASE_URL</code> and <code>REACT_APP_SUPABASE_ANON_KEY</code>.
         </div>
       </Card>
     </div>

@@ -3,40 +3,69 @@ import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
-import { MapView } from "../components/MapView";
+import { LocationMap } from "../components/LocationMap";
 import { dataService } from "../services/dataService";
+import { fetchClient } from "../utils/fetchClient";
 
-function parseNumberOrNull(v) {
-  const t = String(v ?? "").trim();
-  if (!t) return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
+/**
+ * Address geocoding using OpenStreetMap Nominatim.
+ * IMPORTANT: Per requirements, we DO NOT use navigator.geolocation or request permissions.
+ */
+async function geocodeAddress(address) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
+  const response = await fetchClient(url, {
+    headers: {
+      // Per instruction. Note: some browsers may not allow overriding User-Agent, but we include it anyway.
+      "User-Agent": "RoadRescue-MVP/1.0",
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Geocoding failed (${response.status}).`);
+  }
+
+  const data = await response.json();
+  if (!data || data.length === 0) {
+    throw new Error("Address not found");
+  }
+
+  return {
+    lat: parseFloat(data[0].lat),
+    lon: parseFloat(data[0].lon),
+    displayName: data[0].display_name,
+  };
+}
+
+function isValidCoord(n, min, max) {
+  return typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
+}
+
+function formatCoord(n) {
+  if (typeof n !== "number" || !Number.isFinite(n)) return "";
+  return n.toFixed(6);
 }
 
 // PUBLIC_INTERFACE
 export function SubmitRequestPage({ user }) {
-  /** Form to submit a new breakdown request (now includes a map preview for the selected coords). */
+  /** Address-based request submission flow using Nominatim geocoding + shared Leaflet map preview. */
   const navigate = useNavigate();
+
   const [vehicle, setVehicle] = useState({ make: "", model: "", year: "", plate: "" });
   const [issueDescription, setIssueDescription] = useState("");
   const [contact, setContact] = useState({ name: "", phone: "" });
 
-  // Simple location capture: a text hint + optional coordinates.
-  // Chennai is the default map center when coords are not provided.
-  const [locationText, setLocationText] = useState("");
-  const [latText, setLatText] = useState("");
-  const [lngText, setLngText] = useState("");
+  // New address-based location fields
+  const [address, setAddress] = useState("");
+  const [lat, setLat] = useState(null);
+  const [lon, setLon] = useState(null);
+  const [displayAddress, setDisplayAddress] = useState("");
 
+  const [finding, setFinding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const parsedLat = useMemo(() => parseNumberOrNull(latText), [latText]);
-  const parsedLng = useMemo(() => parseNumberOrNull(lngText), [lngText]);
-
-  const marker = useMemo(() => {
-    if (parsedLat == null || parsedLng == null) return null;
-    return { lat: parsedLat, lng: parsedLng };
-  }, [parsedLat, parsedLng]);
+  const canShowMap = useMemo(() => isValidCoord(lat, -90, 90) && isValidCoord(lon, -180, 180), [lat, lon]);
 
   const validate = () => {
     if (!vehicle.make.trim()) return "Vehicle make is required.";
@@ -45,34 +74,65 @@ export function SubmitRequestPage({ user }) {
     if (!contact.name.trim()) return "Contact name is required.";
     if (!contact.phone.trim()) return "Contact phone is required.";
 
-    // Coordinates are optional; if one is provided, require both and validate ranges.
-    const hasLat = String(latText).trim().length > 0;
-    const hasLng = String(lngText).trim().length > 0;
-    if (hasLat || hasLng) {
-      if (parsedLat == null || parsedLng == null) return "Please enter valid latitude and longitude numbers.";
-      if (parsedLat < -90 || parsedLat > 90) return "Latitude must be between -90 and 90.";
-      if (parsedLng < -180 || parsedLng > 180) return "Longitude must be between -180 and 180.";
-    }
+    if (!address.trim()) return "Breakdown address is required.";
+    if (!canShowMap) return "Please click “Find location” to resolve the address to coordinates.";
     return "";
+  };
+
+  const handleFindLocation = async () => {
+    setError("");
+    setDisplayAddress("");
+    setLat(null);
+    setLon(null);
+
+    const trimmed = address.trim();
+    if (!trimmed) {
+      setError("Please enter a breakdown address first.");
+      return;
+    }
+
+    setFinding(true);
+    try {
+      const location = await geocodeAddress(trimmed);
+      if (!isValidCoord(location.lat, -90, 90) || !isValidCoord(location.lon, -180, 180)) {
+        throw new Error("Geocoding returned invalid coordinates.");
+      }
+
+      setLat(location.lat);
+      setLon(location.lon);
+      setDisplayAddress(location.displayName || trimmed);
+    } catch (err) {
+      // Requirement: show error if not found. Keep it non-crashy and visible.
+      setError(err?.message || "Could not find location. Please enter a valid address.");
+    } finally {
+      setFinding(false);
+    }
   };
 
   const submit = async (e) => {
     e.preventDefault();
     setError("");
+
     const msg = validate();
     if (msg) return setError(msg);
 
     setBusy(true);
     try {
-      // Persisting of location is intentionally not wired into the data layer here,
-      // because the current request schema in this repo does not include location fields.
-      // This change adds a UI map preview for the request flow and mechanic detail view.
-      const req = await dataService.createRequest({ user, vehicle, issueDescription, contact });
+      const req = await dataService.createRequest({
+        user,
+        vehicle,
+        issueDescription,
+        contact,
+        location: {
+          lat,
+          lon,
+          address: displayAddress || address.trim(),
+        },
+      });
 
-      // In mock mode, the UI could extend local storage later; for now we navigate as usual.
       navigate(`/requests/${req.id}`);
     } catch (err) {
-      setError(err.message || "Could not submit request.");
+      setError(err?.message || "Could not submit request.");
     } finally {
       setBusy(false);
     }
@@ -82,10 +142,10 @@ export function SubmitRequestPage({ user }) {
     <div className="container">
       <div className="hero">
         <h1 className="h1">Submit a breakdown request</h1>
-        <p className="lead">Tell us what happened and where you are. A mechanic will review and accept it.</p>
+        <p className="lead">Enter your breakdown address. We’ll convert it to coordinates and show it on the map.</p>
       </div>
 
-      <Card title="Request details" subtitle="OpenStreetMap preview (default center: Chennai).">
+      <Card title="Request details" subtitle="Address-based geocoding (OpenStreetMap Nominatim).">
         <form onSubmit={submit} className="form">
           <div className="grid2">
             <Input
@@ -151,54 +211,75 @@ export function SubmitRequestPage({ user }) {
 
           <div className="divider" />
 
-          <div className="grid2">
-            <Input
-              label="Location / landmark"
-              name="locationText"
-              value={locationText}
-              onChange={(e) => setLocationText(e.target.value)}
-              placeholder="e.g., Near Anna Nagar Tower Park"
-              hint="Optional: add a short landmark or area name."
+          <div className="field">
+            <label className="label" htmlFor="address">
+              Breakdown address <span className="req">*</span>
+            </label>
+
+            <textarea
+              id="address"
+              className={`textarea ${error && !address.trim() ? "input-error" : ""}`}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Enter the full address (area, city, landmark, etc.)"
+              rows={3}
+              disabled={finding || busy}
             />
-            <div />
+
+            <div className="row" style={{ marginTop: 8 }}>
+              <Button type="button" variant="ghost" size="sm" onClick={handleFindLocation} disabled={finding || busy}>
+                {finding ? "Finding…" : "Find location"}
+              </Button>
+
+              <div className="hint">No GPS permissions needed. We use OpenStreetMap Nominatim.</div>
+            </div>
+          </div>
+
+          <div className="grid2">
             <Input
               label="Latitude"
               name="latitude"
-              value={latText}
-              onChange={(e) => setLatText(e.target.value)}
-              placeholder="e.g., 13.0827"
-              hint="Optional. If provided, longitude is required too."
+              value={lat == null ? "" : formatCoord(lat)}
+              onChange={() => {}}
+              placeholder="Auto-filled"
+              disabled
+              hint="Read-only"
             />
             <Input
               label="Longitude"
               name="longitude"
-              value={lngText}
-              onChange={(e) => setLngText(e.target.value)}
-              placeholder="e.g., 80.2707"
-              hint="Optional. If provided, latitude is required too."
+              value={lon == null ? "" : formatCoord(lon)}
+              onChange={() => {}}
+              placeholder="Auto-filled"
+              disabled
+              hint="Read-only"
             />
           </div>
 
-          <MapView
-            center={marker || undefined}
-            marker={marker || undefined}
-            height={280}
-            ariaLabel="Selected location map"
-          />
+          {displayAddress ? (
+            <div className="alert alert-info" style={{ marginTop: 4 }}>
+              <div style={{ fontWeight: 800, marginBottom: 4 }}>Resolved address</div>
+              <div style={{ lineHeight: 1.35 }}>{displayAddress}</div>
+            </div>
+          ) : null}
 
-          {locationText.trim() ? (
-            <div className="hint" style={{ marginTop: -6 }}>
-              Location note: <strong>{locationText.trim()}</strong>
+          {canShowMap ? (
+            <div
+              onWheel={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+            >
+              <LocationMap lat={lat} lon={lon} address={displayAddress || ""} height={300} />
             </div>
           ) : null}
 
           {error ? <div className="alert alert-error">{error}</div> : null}
 
           <div className="row">
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || finding}>
               {busy ? "Submitting..." : "Submit request"}
             </Button>
-            <Button variant="secondary" type="button" onClick={() => navigate("/requests")}>
+            <Button variant="secondary" type="button" onClick={() => navigate("/requests")} disabled={finding}>
               View my requests
             </Button>
           </div>

@@ -13,9 +13,9 @@ All three apps can run in **mock mode** (localStorage) or **Supabase mode** (aut
 Each frontend reads:
 
 - `REACT_APP_SUPABASE_URL`
-- `REACT_APP_SUPABASE_KEY`
+- `REACT_APP_SUPABASE_ANON_KEY`
 
-If either is missing/empty, the app automatically falls back to **mock mode**.
+If either is missing/empty, the app will fail fast (these apps are Supabase-first and should not silently fall back to mock mode for production usage).
 
 ## Tables (recommended)
 
@@ -45,7 +45,12 @@ create table if not exists public.requests (
   status text,
   assigned_mechanic_id uuid references auth.users(id) on delete set null,
   assigned_mechanic_email text,
-  notes jsonb
+  notes jsonb,
+
+  -- NEW: address-based location fields (set by user website via Nominatim geocoding)
+  lat double precision,
+  lon double precision,
+  address text
 );
 
 -- FEES: single row keyed by "default"

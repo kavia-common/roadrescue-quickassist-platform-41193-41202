@@ -7,7 +7,7 @@ export function Footer() {
     <footer className="footer">
       <div className="container footer-inner">
         <div>© {new Date().getFullYear()} RoadRescue – QuickAssist</div>
-        <div className="footer-muted">Ocean Professional theme • Mock/Supabase data layer</div>
+        <div className="footer-muted">Ocean Professional theme • Supabase auth & data</div>
       </div>
     </footer>
   );
