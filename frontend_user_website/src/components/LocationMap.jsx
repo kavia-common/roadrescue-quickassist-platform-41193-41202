@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 
@@ -53,7 +53,26 @@ export function LocationMap({ lat, lon, address = "", height = 300 }) {
     return { lat: clat, lon: clon };
   }, [lat, lon]);
 
+  const [map, setMap] = useState(null);
+
+  // Leaflet can render “blank” if mounted inside a layout that’s still computing sizes.
+  // Invalidate once after mount (and when height changes) to force a proper tile/layout pass.
+  useEffect(() => {
+    if (!map) return;
+    const t = window.setTimeout(() => {
+      try {
+        map.invalidateSize();
+      } catch {
+        // Ignore; this is a best-effort rendering nudge.
+      }
+    }, 0);
+
+    return () => window.clearTimeout(t);
+  }, [map, height]);
+
   if (!safe) return null;
+
+  const center = [safe.lat, safe.lon];
 
   return (
     <div className="map-card">
@@ -72,13 +91,15 @@ export function LocationMap({ lat, lon, address = "", height = 300 }) {
 
       <div className="map-frame">
         <MapContainer
-          center={[safe.lat, safe.lon] || [CHENNAI_CENTER.lat, CHENNAI_CENTER.lon]}
+          key={`${safe.lat},${safe.lon}`}
+          center={center || [CHENNAI_CENTER.lat, CHENNAI_CENTER.lon]}
           zoom={15}
           style={{ height: `${height}px`, width: "100%" }}
           scrollWheelZoom={false}
+          whenCreated={setMap}
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <Marker position={[safe.lat, safe.lon]}>
+          <Marker position={center}>
             <Popup>Breakdown Location</Popup>
           </Marker>
         </MapContainer>
