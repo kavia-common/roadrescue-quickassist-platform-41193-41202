@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from "react";
-import { appConfig } from "../../config/appConfig";
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
@@ -46,7 +45,7 @@ async function parseTwilioError(response) {
 
 // PUBLIC_INTERFACE
 export function TwilioSmsDemoCard({ title = "SMS Demo", defaultTo = "" }) {
-  /** Demo card that simulates the mocked "mechanic accepts job" event by sending an SMS via Twilio. */
+  /** Demo card that simulates the "mechanic accepts job" event by sending an SMS via Twilio. */
   const [to, setTo] = useState(defaultTo);
   const [body, setBody] = useState("Your RoadRescue job has been accepted by a mechanic.");
   const [status, setStatus] = useState({ type: "", message: "" }); // type: success|error|info
@@ -55,7 +54,6 @@ export function TwilioSmsDemoCard({ title = "SMS Demo", defaultTo = "" }) {
   const cfg = useMemo(() => getTwilioConfig(), []);
 
   const canSend = useMemo(() => {
-    if (appConfig.isMockMode) return false;
     if (!cfg.accountSid || !cfg.authToken) return false;
     if (!cfg.messagingServiceSid && !cfg.fromNumber) return false;
     return true;
@@ -63,11 +61,6 @@ export function TwilioSmsDemoCard({ title = "SMS Demo", defaultTo = "" }) {
 
   const onSend = async () => {
     setStatus({ type: "", message: "" });
-
-    if (appConfig.isMockMode) {
-      setStatus({ type: "error", message: "Twilio demo is disabled in MOCK MODE (network calls are blocked)." });
-      return;
-    }
 
     const toTrim = to.trim();
     if (!toTrim) {
@@ -109,7 +102,7 @@ export function TwilioSmsDemoCard({ title = "SMS Demo", defaultTo = "" }) {
       const resp = await fetch(url, {
         method: "POST",
         headers: {
-          "Authorization": `Basic ${basic}`,
+          Authorization: `Basic ${basic}`,
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         },
         body: form.toString(),
@@ -150,18 +143,10 @@ export function TwilioSmsDemoCard({ title = "SMS Demo", defaultTo = "" }) {
 
       {!canSend ? (
         <div className="alert alert-info" style={{ marginBottom: 12 }}>
-          {appConfig.isMockMode ? (
-            <div>
-              Twilio demo is disabled in <strong>MOCK MODE</strong> (network calls are blocked).
-            </div>
-          ) : (
-            <>
-              Twilio is not fully configured for this demo. Set:
-              <div style={{ marginTop: 6, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: 12 }}>
-                REACT_APP_TWILIO_ACCOUNT_SID, REACT_APP_TWILIO_AUTH_TOKEN, REACT_APP_TWILIO_MESSAGING_SERVICE_SID (or REACT_APP_TWILIO_FROM_NUMBER)
-              </div>
-            </>
-          )}
+          Twilio is not fully configured for this demo. Set:
+          <div style={{ marginTop: 6, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: 12 }}>
+            REACT_APP_TWILIO_ACCOUNT_SID, REACT_APP_TWILIO_AUTH_TOKEN, REACT_APP_TWILIO_MESSAGING_SERVICE_SID (or REACT_APP_TWILIO_FROM_NUMBER)
+          </div>
         </div>
       ) : null}
 

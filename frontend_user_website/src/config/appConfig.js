@@ -4,9 +4,9 @@
  * CRA exposes env vars prefixed with REACT_APP_.
  */
 
-function parseBool(v) {
-  const s = String(v ?? "").trim().toLowerCase();
-  return s === "1" || s === "true" || s === "yes" || s === "on";
+function getRequiredEnv(name) {
+  const value = String(process.env[name] ?? "").trim();
+  return value;
 }
 
 /**
@@ -14,13 +14,21 @@ function parseBool(v) {
  */
 export const appConfig = {
   /**
-   * Explicit MOCK MODE switch.
-   * When true, the app must not perform any network calls (Supabase, fetch, Twilio, etc.).
+   * Supabase URL (required).
    */
-  isMockMode: parseBool(process.env.REACT_APP_USE_MOCKS),
+  supabaseUrl: getRequiredEnv("REACT_APP_SUPABASE_URL"),
 
   /**
-   * Optional label for banner/logging.
+   * Supabase anon key (required).
    */
-  mockModeLabel: process.env.REACT_APP_USE_MOCKS ? "MOCK MODE" : "",
+  supabaseAnonKey: getRequiredEnv("REACT_APP_SUPABASE_KEY"),
+
+  /**
+   * Boot timeout in milliseconds. Prevents infinite loading if auth/session hangs.
+   */
+  bootTimeoutMs: (() => {
+    const raw = String(process.env.REACT_APP_BOOT_TIMEOUT_MS ?? "").trim();
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 8000;
+  })(),
 };

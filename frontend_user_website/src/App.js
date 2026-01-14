@@ -16,30 +16,42 @@ import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { AboutPage } from "./pages/AboutPage";
 import { TwilioSmsDemoCard } from "./components/demo/TwilioSmsDemoCard";
 
+function withTimeout(promise, ms, label = "operation") {
+  let timerId = null;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timerId = window.setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timerId) window.clearTimeout(timerId);
+  });
+}
+
 // PUBLIC_INTERFACE
 function App() {
-  /** User website entry: auth, request submission, status tracking. */
+  /** User website entry: Supabase auth + request submission + status tracking. */
   const [user, setUser] = useState(null);
   const [booted, setBooted] = useState(false);
+  const [bootError, setBootError] = useState("");
 
   useEffect(() => {
     let mounted = true;
 
-    if (appConfig.isMockMode) {
-      // eslint-disable-next-line no-console
-      console.info("[RoadRescue QuickAssist] MOCK MODE active: all network calls are disabled.");
-    }
-
-    // 1) Initial boot: load current user (handles Supabase persisted session after OAuth redirect)
     (async () => {
-      const u = await dataService.getCurrentUser();
-      if (mounted) {
+      try {
+        const u = await withTimeout(dataService.getCurrentUser(), appConfig.bootTimeoutMs, "Auth boot");
+        if (!mounted) return;
         setUser(u);
-        setBooted(true);
+      } catch (e) {
+        if (!mounted) return;
+        setUser(null);
+        setBootError(e?.message || "Unable to initialize authentication.");
+      } finally {
+        if (mounted) setBooted(true);
       }
     })();
 
-    // 2) Keep UI in sync with Supabase auth state (no-op in mock mode)
     const unsubscribe = dataService.subscribeToAuthChanges((nextUser) => {
       if (!mounted) return;
       setUser(nextUser);
@@ -64,31 +76,15 @@ function App() {
   return (
     <BrowserRouter>
       <div className="app-shell">
-        {appConfig.isMockMode ? (
-          <div
-            style={{
-              position: "sticky",
-              top: 0,
-              zIndex: 20,
-              background: "rgba(245, 158, 11, 0.18)",
-              borderBottom: "1px solid rgba(245, 158, 11, 0.35)",
-              color: "var(--text)",
-              fontWeight: 800,
-              padding: "8px 12px",
-              textAlign: "center",
-            }}
-            role="status"
-            aria-label="Mock mode banner"
-          >
-            MOCK MODE: running offline (network disabled)
-          </div>
-        ) : null}
         <Navbar user={user} />
         <main className="main">
           <Routes>
             <Route path="/" element={<Navigate to={user ? "/submit" : "/login"} replace />} />
             <Route path="/about" element={<AboutPage />} />
-            <Route path="/login" element={user ? <Navigate to="/submit" replace /> : <LoginPage onAuthed={setUser} />} />
+            <Route
+              path="/login"
+              element={user ? <Navigate to="/submit" replace /> : <LoginPage onAuthed={setUser} bootError={bootError} />}
+            />
             <Route path="/register" element={user ? <Navigate to="/submit" replace /> : <RegisterPage onAuthed={setUser} />} />
 
             <Route
@@ -123,7 +119,7 @@ function App() {
                   <div className="container">
                     <div className="hero">
                       <h1 className="h1">SMS Demo</h1>
-                      <p className="lead">Simulate the mocked “Mechanic accepts job” event.</p>
+                      <p className="lead">Simulate the “Mechanic accepts job” event.</p>
                     </div>
                     <TwilioSmsDemoCard title="Mechanic accepts job (Demo)" />
                   </div>
