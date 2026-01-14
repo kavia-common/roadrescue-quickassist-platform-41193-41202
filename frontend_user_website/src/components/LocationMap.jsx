@@ -2,20 +2,20 @@ import React, { useMemo } from "react";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 
-import "leaflet/dist/leaflet.css";
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
 /**
- * Fix Leaflet marker icon paths when bundling with CRA.
- * Without this, markers often render as missing images.
+ * Fix Leaflet marker icon paths when bundling with CRA/webpack.
+ * Without this, the map may load but the marker can silently fail to appear.
  */
-const DEFAULT_ICON = L.icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
+delete L.Icon.Default.prototype._getIconUrl;
+
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
 });
 
 const CHENNAI_CENTER = { lat: 13.0827, lon: 80.2707 };
@@ -70,15 +70,15 @@ export function LocationMap({ lat, lon, address = "", height = 300 }) {
         </div>
       </div>
 
-      <div className="map-frame" style={{ height }}>
+      <div className="map-frame">
         <MapContainer
           center={[safe.lat, safe.lon] || [CHENNAI_CENTER.lat, CHENNAI_CENTER.lon]}
           zoom={15}
-          style={{ height: "100%", width: "100%" }}
+          style={{ height: `${height}px`, width: "100%" }}
           scrollWheelZoom={false}
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <Marker position={[safe.lat, safe.lon]} icon={DEFAULT_ICON}>
+          <Marker position={[safe.lat, safe.lon]}>
             <Popup>Breakdown Location</Popup>
           </Marker>
         </MapContainer>
