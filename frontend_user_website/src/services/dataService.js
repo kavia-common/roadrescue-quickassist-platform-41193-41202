@@ -1,5 +1,5 @@
 import { normalizeStatus } from "./statusUtils";
-import { supabase } from "./supabaseClient";
+import { getSupabase } from "./supabaseClient";
 import { appConfig } from "../config/appConfig";
 import { withTimeout } from "../utils/withTimeout";
 
@@ -9,6 +9,8 @@ import { withTimeout } from "../utils/withTimeout";
  */
 async function supaUserToAppUser(supaUser) {
   if (!supaUser) return null;
+
+  const supabase = getSupabase();
 
   // Default role/approval if profiles table isn't configured or RLS blocks.
   let role = "user";
@@ -116,12 +118,9 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async register(email, password) {
+    const supabase = getSupabase();
     try {
-      const res = await withTimeout(
-        supabase.auth.signUp({ email, password }),
-        appConfig.bootTimeoutMs,
-        "Sign up"
-      );
+      const res = await withTimeout(supabase.auth.signUp({ email, password }), appConfig.bootTimeoutMs, "Sign up");
 
       const { data, error } = res;
       if (error) throw error;
@@ -136,6 +135,7 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async login(email, password) {
+    const supabase = getSupabase();
     try {
       const res = await withTimeout(
         supabase.auth.signInWithPassword({ email, password }),
@@ -158,6 +158,7 @@ export const dataService = {
   // PUBLIC_INTERFACE
   async loginWithGoogle({ redirectTo } = {}) {
     /** Starts Supabase OAuth sign-in with Google (Supabase mode). */
+    const supabase = getSupabase();
     const finalRedirect = redirectTo || window.location.origin;
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -171,6 +172,7 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async logout() {
+    const supabase = getSupabase();
     const { error } = await supabase.auth.signOut();
     if (error) {
       // eslint-disable-next-line no-console
@@ -181,6 +183,7 @@ export const dataService = {
   // PUBLIC_INTERFACE
   async getCurrentUser() {
     /** Returns current authenticated user or null. */
+    const supabase = getSupabase();
     const { data, error } = await supabase.auth.getUser();
     if (error) return null;
     const u = data?.user;
@@ -191,6 +194,7 @@ export const dataService = {
   // PUBLIC_INTERFACE
   subscribeToAuthChanges(onUserChanged) {
     /** Subscribe to Supabase auth state changes; returns unsubscribe. */
+    const supabase = getSupabase();
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -198,9 +202,7 @@ export const dataService = {
         const next = session?.user ? await supaUserToAppUser(session.user) : null;
         onUserChanged?.(next);
       } catch {
-        onUserChanged?.(
-          session?.user ? { id: session.user.id, email: session.user.email, role: "user", approved: true } : null
-        );
+        onUserChanged?.(session?.user ? { id: session.user.id, email: session.user.email, role: "user", approved: true } : null);
       }
     });
 
@@ -210,6 +212,7 @@ export const dataService = {
   // PUBLIC_INTERFACE
   async getProfile(userId) {
     /** Returns profile row from public.profiles. */
+    const supabase = getSupabase();
     const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw new Error("Profile not found.");
@@ -224,6 +227,7 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async listRequests({ forUserId } = {}) {
+    const supabase = getSupabase();
     const q = supabase.from("requests").select("*").order("created_at", { ascending: false });
     const res = forUserId ? await q.eq("user_id", forUserId) : await q;
     if (res.error) throw new Error(res.error.message);
@@ -245,6 +249,7 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async getRequestById(requestId) {
+    const supabase = getSupabase();
     const { data, error } = await supabase.from("requests").select("*").eq("id", requestId).maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) return null;
@@ -266,6 +271,7 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async createRequest({ user, vehicle, issueDescription, contact }) {
+    const supabase = getSupabase();
     const nowIso = new Date().toISOString();
 
     const safeVehicle = {
@@ -311,7 +317,10 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   isSupabaseConfigured() {
-    /** Supabase-only app: always true if the app is running (client creation asserts env). */
+    /**
+     * Supabase-only app: returns true if env vars exist.
+     * (Does not attempt network calls.)
+     */
     return true;
   },
 };

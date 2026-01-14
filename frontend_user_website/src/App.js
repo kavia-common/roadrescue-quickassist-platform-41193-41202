@@ -9,6 +9,7 @@ import { dataService } from "./services/dataService";
 import { appConfig } from "./config/appConfig";
 import { withTimeout } from "./utils/withTimeout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { getSupabaseInitState } from "./services/supabaseClient";
 
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -186,13 +187,67 @@ function AppShell() {
   );
 }
 
+function SupabaseConfigErrorScreen({ message, missing }) {
+  return (
+    <div className="container" style={{ paddingTop: 24, paddingBottom: 48 }}>
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">Configuration required</h2>
+            <p className="card-subtitle">
+              This app is Supabase-only. It can’t start until required environment variables are set.
+            </p>
+          </div>
+        </div>
+        <div className="card-body">
+          <div className="alert alert-error" style={{ marginBottom: 12 }}>
+            {message}
+          </div>
+
+          <div style={{ fontWeight: 800, marginBottom: 6 }}>Missing variables</div>
+          <ul className="list" style={{ marginTop: 0 }}>
+            {(missing || []).map((k) => (
+              <li key={k}>
+                <code>{k}</code>
+              </li>
+            ))}
+          </ul>
+
+          <div className="note">
+            After setting env vars, you must restart/rebuild the app (Create React App reads env at build time).
+          </div>
+
+          <div className="divider" />
+          <div className="row">
+            <a className="link" href="/about">
+              About data & auth
+            </a>
+            <a className="link" href="/">
+              Reload
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // PUBLIC_INTERFACE
 function App() {
   /** User website entry: Supabase auth + request submission + status tracking. */
+
+  // Validate Supabase env vars *before* the rest of the app boots.
+  // This must never throw or return null: always render a visible UI.
+  const init = getSupabaseInitState();
+
   return (
     <BrowserRouter>
       <ErrorBoundary>
-        <AppShell />
+        {!init.configured ? (
+          <SupabaseConfigErrorScreen message={init.message} missing={init.missing} />
+        ) : (
+          <AppShell />
+        )}
       </ErrorBoundary>
     </BrowserRouter>
   );

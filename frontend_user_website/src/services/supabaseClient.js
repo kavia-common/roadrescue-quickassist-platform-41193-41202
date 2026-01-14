@@ -1,23 +1,101 @@
 import { createClient } from "@supabase/supabase-js";
 import { appConfig } from "../config/appConfig";
 
-function assertSupabaseConfigured() {
-  if (!appConfig.supabaseUrl || !appConfig.supabaseAnonKey) {
-    throw new Error(
-      "Supabase is not configured. Please set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY."
-    );
+/**
+ * IMPORTANT DESIGN GOAL
+ * ---------------------
+ * This app must never crash at import time due to missing env vars.
+ * Instead, Supabase initialization is deferred until first use.
+ *
+ * If configuration is missing, we:
+ * - log clear errors to console
+ * - expose config state via getSupabaseInitState()
+ * - throw a friendly error from getSupabase() so callers can handle it
+ */
+
+let _supabase = null;
+
+/**
+ * Returns an object describing whether Supabase is configured and any config errors.
+ * This is safe to call during render.
+ */
+function getSupabaseConfigStatus() {
+  const missing = [];
+  if (!appConfig.supabaseUrl) missing.push("REACT_APP_SUPABASE_URL");
+  if (!appConfig.supabaseAnonKey) missing.push("REACT_APP_SUPABASE_ANON_KEY");
+
+  if (missing.length) {
+    const message = `Supabase is not configured. Missing: ${missing.join(
+      ", "
+    )}. Please set these environment variables and rebuild the app.`;
+    return { configured: false, missing, message };
   }
+
+  return { configured: true, missing: [], message: "" };
 }
 
-// Create the client once (module singleton) to preserve auth session across imports.
-assertSupabaseConfigured();
+/**
+ * Log config errors once to keep console readable.
+ */
+let _didLogConfigError = false;
+function logSupabaseConfigErrorOnce(status) {
+  if (_didLogConfigError) return;
+  _didLogConfigError = true;
+
+  // eslint-disable-next-line no-console
+  console.error(
+    "[Supabase Config Error]",
+    status.message,
+    "\nResolved values:",
+    {
+      REACT_APP_SUPABASE_URL: appConfig.supabaseUrl ? "(set)" : "(missing)",
+      REACT_APP_SUPABASE_ANON_KEY: appConfig.supabaseAnonKey ? "(set)" : "(missing)",
+    }
+  );
+}
+
+/**
+ * PUBLIC_INTERFACE
+ */
+export function getSupabaseInitState() {
+  /**
+   * Returns:
+   * - configured: boolean
+   * - missing: string[]
+   * - message: string
+   *
+   * Does not throw. Intended for UI fallback rendering.
+   */
+  const status = getSupabaseConfigStatus();
+  if (!status.configured) logSupabaseConfigErrorOnce(status);
+  return status;
+}
 
 /**
  * PUBLIC_INTERFACE
  */
 export function isSupabaseConfigured() {
   /** Returns true when required Supabase env vars are present and non-empty. */
-  return Boolean(appConfig.supabaseUrl && appConfig.supabaseAnonKey);
+  return getSupabaseConfigStatus().configured;
 }
 
-export const supabase = createClient(appConfig.supabaseUrl, appConfig.supabaseAnonKey);
+/**
+ * PUBLIC_INTERFACE
+ */
+export function getSupabase() {
+  /**
+   * Lazily initializes and returns the Supabase client singleton.
+   *
+   * Throws a friendly error if config is missing so callers can display UI.
+   */
+  if (_supabase) return _supabase;
+
+  const status = getSupabaseConfigStatus();
+  if (!status.configured) {
+    logSupabaseConfigErrorOnce(status);
+    throw new Error(status.message);
+  }
+
+  _supabase = createClient(appConfig.supabaseUrl, appConfig.supabaseAnonKey);
+  return _supabase;
+}
