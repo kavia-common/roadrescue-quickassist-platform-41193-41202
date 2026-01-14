@@ -283,6 +283,9 @@ export const dataService = {
       assignedMechanicId: r.assigned_mechanic_id,
       assignedMechanicEmail: r.assigned_mechanic_email,
       notes: r.notes || [],
+      lat: typeof r.lat === "number" ? r.lat : r.lat != null ? Number(r.lat) : null,
+      lon: typeof r.lon === "number" ? r.lon : r.lon != null ? Number(r.lon) : null,
+      address: typeof r.address === "string" ? r.address : "",
     }));
   },
 
@@ -305,11 +308,14 @@ export const dataService = {
       assignedMechanicId: data.assigned_mechanic_id,
       assignedMechanicEmail: data.assigned_mechanic_email,
       notes: data.notes || [],
+      lat: typeof data.lat === "number" ? data.lat : data.lat != null ? Number(data.lat) : null,
+      lon: typeof data.lon === "number" ? data.lon : data.lon != null ? Number(data.lon) : null,
+      address: typeof data.address === "string" ? data.address : "",
     };
   },
 
   // PUBLIC_INTERFACE
-  async createRequest({ user, vehicle, issueDescription, contact }) {
+  async createRequest({ user, vehicle, issueDescription, contact, location } = {}) {
     const supabase = getSupabase();
     const nowIso = new Date().toISOString();
 
@@ -322,6 +328,10 @@ export const dataService = {
       phone: contact?.phone || "",
     };
 
+    const safeLat = typeof location?.lat === "number" && Number.isFinite(location.lat) ? location.lat : null;
+    const safeLon = typeof location?.lon === "number" && Number.isFinite(location.lon) ? location.lon : null;
+    const safeAddress = typeof location?.address === "string" ? location.address.trim() : "";
+
     const insertPayload = {
       created_at: nowIso,
       user_id: user.id,
@@ -333,6 +343,11 @@ export const dataService = {
       assigned_mechanic_id: null,
       assigned_mechanic_email: null,
       notes: [],
+
+      // NEW: address-based geocoding fields
+      lat: safeLat,
+      lon: safeLon,
+      address: safeAddress,
     };
 
     const { data, error } = await supabase.from("requests").insert(insertPayload).select().maybeSingle();
@@ -351,6 +366,11 @@ export const dataService = {
       assignedMechanicId: data.assigned_mechanic_id,
       assignedMechanicEmail: data.assigned_mechanic_email,
       notes: data.notes || [],
+
+      // NEW: location fields
+      lat: typeof data.lat === "number" ? data.lat : data.lat != null ? Number(data.lat) : null,
+      lon: typeof data.lon === "number" ? data.lon : data.lon != null ? Number(data.lon) : null,
+      address: typeof data.address === "string" ? data.address : "",
     };
   },
 

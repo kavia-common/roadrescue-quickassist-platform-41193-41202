@@ -45,7 +45,12 @@ create table if not exists public.requests (
   status text,
   assigned_mechanic_id uuid references auth.users(id) on delete set null,
   assigned_mechanic_email text,
-  notes jsonb
+  notes jsonb,
+
+  -- NEW: address-based location fields (set by user website via Nominatim geocoding)
+  lat double precision,
+  lon double precision,
+  address text
 );
 
 -- FEES: single row keyed by "default"
