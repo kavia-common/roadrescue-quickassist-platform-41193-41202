@@ -211,17 +211,38 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   subscribeToAuthChanges(onUserChanged) {
-    /** Subscribe to Supabase auth state changes; returns unsubscribe. */
+    /** Subscribe to Supabase auth state changes; returns unsubscribe.
+     *
+     * IMPORTANT: Must not block UI transitions.
+     * Some environments/RLS configurations can make profile lookups slow or fail.
+     * We emit a minimal user immediately, then enrich role/approved in the background.
+     */
     const supabase = getSupabase();
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        const next = session?.user ? await supaUserToAppUser(session.user) : null;
-        onUserChanged?.(next);
-      } catch {
-        onUserChanged?.(session?.user ? { id: session.user.id, email: session.user.email, role: "user", approved: true } : null);
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const rawUser = session?.user || null;
+
+      if (!rawUser) {
+        onUserChanged?.(null);
+        return;
       }
+
+      // Emit immediately so auth state resolves without waiting on DB/RLS.
+      const basicUser = { id: rawUser.id, email: rawUser.email, role: "user", approved: true };
+      onUserChanged?.(basicUser);
+
+      // Best-effort enrichment (async, non-blocking).
+      (async () => {
+        try {
+          const enriched = await supaUserToAppUser(rawUser);
+          // Only emit if enrichment produced something meaningful.
+          if (enriched) onUserChanged?.(enriched);
+        } catch {
+          // Ignore enrichment errors; basic user is already emitted.
+        }
+      })();
     });
 
     return () => subscription?.unsubscribe?.();

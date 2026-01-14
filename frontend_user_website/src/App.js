@@ -74,6 +74,7 @@ function AppShell() {
   const [authState, setAuthState] = useState("loading"); // "loading" | "authenticated" | "unauthenticated"
   const [user, setUser] = useState(null);
   const [bootError, setBootError] = useState("");
+  const [bootResolved, setBootResolved] = useState(false);
 
   const routeMessage = useMemo(() => getRouteStateMessage(location), [location]);
   const effectiveBootError = routeMessage || bootError;
@@ -96,6 +97,7 @@ function AppShell() {
 
         setUser(appUser);
         setAuthState(appUser ? "authenticated" : "unauthenticated");
+        setBootResolved(true);
 
         // If boot determined we are unauthenticated and we are currently on a protected route,
         // we can send them to login. Keep /login and /register accessible.
@@ -111,6 +113,7 @@ function AppShell() {
         setUser(null);
         setBootError(msg);
         setAuthState("unauthenticated");
+        setBootResolved(true);
 
         navigate("/login", { replace: true, state: { message: msg } });
       }
@@ -149,7 +152,13 @@ function AppShell() {
 
           <Route
             path="/login"
-            element={user ? <Navigate to="/submit" replace /> : <LoginPage onAuthed={setUser} bootError={effectiveBootError} />}
+            element={
+              user ? (
+                <Navigate to="/submit" replace />
+              ) : (
+                <LoginPage onAuthed={setUser} bootError={effectiveBootError} bootResolved={bootResolved} />
+              )
+            }
           />
           <Route
             path="/register"
