@@ -1,5 +1,7 @@
 import { normalizeStatus } from "./statusUtils";
 import { supabase } from "./supabaseClient";
+import { appConfig } from "../config/appConfig";
+import { withTimeout } from "../utils/withTimeout";
 
 /**
  * Convert a Supabase auth user into the minimal "app user" shape expected by the UI.
@@ -91,25 +93,66 @@ function normalizeContact(contact, row) {
   - Always set status="open" on create.
 */
 
+function normalizeSupabaseAuthError(err) {
+  // Supabase errors can vary by provider/settings. We keep the UI message clear.
+  const raw = String(err?.message || "").trim();
+  const lower = raw.toLowerCase();
+
+  if (!raw) return "Authentication failed.";
+
+  // Common cases:
+  if (lower.includes("invalid login credentials")) return "Invalid email or password.";
+  if (lower.includes("email not confirmed") || lower.includes("confirm your email")) {
+    return "Please confirm your email address before signing in.";
+  }
+  if (lower.includes("too many requests")) return "Too many attempts. Please wait a moment and try again.";
+
+  return raw;
+}
+
 // PUBLIC_INTERFACE
 export const dataService = {
   /** Supabase-only data access facade (no mock/demo/localStorage). */
 
   // PUBLIC_INTERFACE
   async register(email, password) {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) throw new Error(error.message);
+    try {
+      const res = await withTimeout(
+        supabase.auth.signUp({ email, password }),
+        appConfig.bootTimeoutMs,
+        "Sign up"
+      );
 
-    // When email confirmation is enabled, user may be null initially.
-    if (!data?.user) return { id: "pending", email, role: "user", approved: true };
-    return supaUserToAppUser(data.user);
+      const { data, error } = res;
+      if (error) throw error;
+
+      // When email confirmation is enabled, user may be null initially.
+      if (!data?.user) return { id: "pending", email, role: "user", approved: true };
+      return supaUserToAppUser(data.user);
+    } catch (e) {
+      throw new Error(normalizeSupabaseAuthError(e));
+    }
   },
 
   // PUBLIC_INTERFACE
   async login(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-    return supaUserToAppUser(data.user);
+    try {
+      const res = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        appConfig.bootTimeoutMs,
+        "Sign in"
+      );
+
+      const { data, error } = res;
+      if (error) throw error;
+
+      // In normal password flow, Supabase returns user immediately on success.
+      // Still guard to avoid downstream null derefs.
+      if (!data?.user) throw new Error("Sign-in succeeded but no user was returned.");
+      return supaUserToAppUser(data.user);
+    } catch (e) {
+      throw new Error(normalizeSupabaseAuthError(e));
+    }
   },
 
   // PUBLIC_INTERFACE
