@@ -8,6 +8,7 @@ import { RequireAuth } from "./routes/RequireAuth";
 import { dataService } from "./services/dataService";
 import { appConfig } from "./config/appConfig";
 import { withTimeout } from "./utils/withTimeout";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -15,6 +16,7 @@ import { SubmitRequestPage } from "./pages/SubmitRequestPage";
 import { MyRequestsPage } from "./pages/MyRequestsPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { AboutPage } from "./pages/AboutPage";
+import { DashboardPage } from "./pages/DashboardPage";
 import { TwilioSmsDemoCard } from "./components/demo/TwilioSmsDemoCard";
 
 function getRouteStateMessage(location) {
@@ -57,9 +59,7 @@ function AppShell() {
       } catch (e) {
         if (!mounted) return;
 
-        const msg =
-          e?.message ||
-          "We couldn’t initialize your session. Please log in again.";
+        const msg = e?.message || "We couldn’t initialize your session. Please log in again.";
         setUser(null);
         setBootError(msg);
 
@@ -81,61 +81,82 @@ function AppShell() {
   // Prefer route-provided message (redirect), else boot error.
   const effectiveBootError = routeMessage || bootError;
 
+  /**
+   * TEMPORARY DEBUG MODE:
+   * - Render Dashboard unconditionally and bypass auth guards so we can confirm UI renders
+   *   even when Supabase/auth is failing or timing out in preview environments.
+   *
+   * Once verified, revert RequireAuth usage for protected routes and switch "/" redirect logic back.
+   */
+  const bypassAuthForDebug = true;
+
   // Non-blocking UI: no full-screen loading gate.
-  // If boot isn't resolved yet, routes still render; RequireAuth will redirect to /login for protected pages.
-  // This prevents "stuck on Loading…" in environments where auth calls hang.
   return (
     <div className="app-shell">
       <Navbar user={user} />
       <main className="main">
         <Routes>
-          <Route path="/" element={<Navigate to={user ? "/submit" : "/login"} replace />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/about" element={<AboutPage />} />
+
           <Route
             path="/login"
             element={
               user ? (
-                <Navigate to="/submit" replace />
+                <Navigate to={bypassAuthForDebug ? "/dashboard" : "/submit"} replace />
               ) : (
-                <LoginPage
-                  onAuthed={setUser}
-                  bootError={effectiveBootError}
-                  bootResolved={bootResolved}
-                />
+                <LoginPage onAuthed={setUser} bootError={effectiveBootError} bootResolved={bootResolved} />
               )
             }
           />
-          <Route path="/register" element={user ? <Navigate to="/submit" replace /> : <RegisterPage onAuthed={setUser} />} />
+          <Route
+            path="/register"
+            element={user ? <Navigate to={bypassAuthForDebug ? "/dashboard" : "/submit"} replace /> : <RegisterPage onAuthed={setUser} />}
+          />
 
           <Route
             path="/submit"
             element={
-              <RequireAuth user={user}>
-                <SubmitRequestPage user={user} />
-              </RequireAuth>
+              bypassAuthForDebug ? (
+                <SubmitRequestPage user={user || { id: "debug", email: "debug@local", role: "user", approved: true }} />
+              ) : (
+                <RequireAuth user={user}>
+                  <SubmitRequestPage user={user} />
+                </RequireAuth>
+              )
             }
           />
           <Route
             path="/requests"
             element={
-              <RequireAuth user={user}>
-                <MyRequestsPage user={user} />
-              </RequireAuth>
+              bypassAuthForDebug ? (
+                <MyRequestsPage user={user || { id: "debug", email: "debug@local", role: "user", approved: true }} />
+              ) : (
+                <RequireAuth user={user}>
+                  <MyRequestsPage user={user} />
+                </RequireAuth>
+              )
             }
           />
           <Route
             path="/requests/:requestId"
             element={
-              <RequireAuth user={user}>
-                <RequestDetailPage user={user} />
-              </RequireAuth>
+              bypassAuthForDebug ? (
+                <RequestDetailPage user={user || { id: "debug", email: "debug@local", role: "user", approved: true }} />
+              ) : (
+                <RequireAuth user={user}>
+                  <RequestDetailPage user={user} />
+                </RequireAuth>
+              )
             }
           />
 
           <Route
             path="/demo-sms"
             element={
-              <RequireAuth user={user}>
+              bypassAuthForDebug ? (
                 <div className="container">
                   <div className="hero">
                     <h1 className="h1">SMS Demo</h1>
@@ -143,7 +164,17 @@ function AppShell() {
                   </div>
                   <TwilioSmsDemoCard title="Mechanic accepts job (Demo)" />
                 </div>
-              </RequireAuth>
+              ) : (
+                <RequireAuth user={user}>
+                  <div className="container">
+                    <div className="hero">
+                      <h1 className="h1">SMS Demo</h1>
+                      <p className="lead">Simulate the “Mechanic accepts job” event.</p>
+                    </div>
+                    <TwilioSmsDemoCard title="Mechanic accepts job (Demo)" />
+                  </div>
+                </RequireAuth>
+              )
             }
           />
 
@@ -160,7 +191,9 @@ function App() {
   /** User website entry: Supabase auth + request submission + status tracking. */
   return (
     <BrowserRouter>
-      <AppShell />
+      <ErrorBoundary>
+        <AppShell />
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }
