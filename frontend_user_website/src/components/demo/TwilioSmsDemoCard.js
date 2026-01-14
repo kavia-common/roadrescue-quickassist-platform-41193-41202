@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { appConfig } from "../../config/appConfig";
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
@@ -54,6 +55,7 @@ export function TwilioSmsDemoCard({ title = "SMS Demo", defaultTo = "" }) {
   const cfg = useMemo(() => getTwilioConfig(), []);
 
   const canSend = useMemo(() => {
+    if (appConfig.isMockMode) return false;
     if (!cfg.accountSid || !cfg.authToken) return false;
     if (!cfg.messagingServiceSid && !cfg.fromNumber) return false;
     return true;
@@ -61,6 +63,11 @@ export function TwilioSmsDemoCard({ title = "SMS Demo", defaultTo = "" }) {
 
   const onSend = async () => {
     setStatus({ type: "", message: "" });
+
+    if (appConfig.isMockMode) {
+      setStatus({ type: "error", message: "Twilio demo is disabled in MOCK MODE (network calls are blocked)." });
+      return;
+    }
 
     const toTrim = to.trim();
     if (!toTrim) {
@@ -143,10 +150,18 @@ export function TwilioSmsDemoCard({ title = "SMS Demo", defaultTo = "" }) {
 
       {!canSend ? (
         <div className="alert alert-info" style={{ marginBottom: 12 }}>
-          Twilio is not fully configured for this demo. Set:
-          <div style={{ marginTop: 6, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: 12 }}>
-            REACT_APP_TWILIO_ACCOUNT_SID, REACT_APP_TWILIO_AUTH_TOKEN, REACT_APP_TWILIO_MESSAGING_SERVICE_SID (or REACT_APP_TWILIO_FROM_NUMBER)
-          </div>
+          {appConfig.isMockMode ? (
+            <div>
+              Twilio demo is disabled in <strong>MOCK MODE</strong> (network calls are blocked).
+            </div>
+          ) : (
+            <>
+              Twilio is not fully configured for this demo. Set:
+              <div style={{ marginTop: 6, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: 12 }}>
+                REACT_APP_TWILIO_ACCOUNT_SID, REACT_APP_TWILIO_AUTH_TOKEN, REACT_APP_TWILIO_MESSAGING_SERVICE_SID (or REACT_APP_TWILIO_FROM_NUMBER)
+              </div>
+            </>
+          )}
         </div>
       ) : null}
 

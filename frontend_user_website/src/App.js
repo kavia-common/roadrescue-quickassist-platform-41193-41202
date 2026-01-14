@@ -6,6 +6,7 @@ import { Navbar } from "./components/layout/Navbar";
 import { Footer } from "./components/layout/Footer";
 import { RequireAuth } from "./routes/RequireAuth";
 import { dataService } from "./services/dataService";
+import { appConfig } from "./config/appConfig";
 
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -23,6 +24,11 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
+
+    if (appConfig.isMockMode) {
+      // eslint-disable-next-line no-console
+      console.info("[RoadRescue QuickAssist] MOCK MODE active: all network calls are disabled.");
+    }
 
     // 1) Initial boot: load current user (handles Supabase persisted session after OAuth redirect)
     (async () => {
@@ -58,6 +64,25 @@ function App() {
   return (
     <BrowserRouter>
       <div className="app-shell">
+        {appConfig.isMockMode ? (
+          <div
+            style={{
+              position: "sticky",
+              top: 0,
+              zIndex: 20,
+              background: "rgba(245, 158, 11, 0.18)",
+              borderBottom: "1px solid rgba(245, 158, 11, 0.35)",
+              color: "var(--text)",
+              fontWeight: 800,
+              padding: "8px 12px",
+              textAlign: "center",
+            }}
+            role="status"
+            aria-label="Mock mode banner"
+          >
+            MOCK MODE: running offline (network disabled)
+          </div>
+        ) : null}
         <Navbar user={user} />
         <main className="main">
           <Routes>

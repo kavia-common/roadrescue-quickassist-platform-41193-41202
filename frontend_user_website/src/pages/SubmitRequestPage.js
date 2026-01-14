@@ -5,6 +5,7 @@ import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { MapView } from "../components/MapView";
 import { dataService } from "../services/dataService";
+import { fetchClient } from "../utils/fetchClient";
 
 function parseNumberOrNull(v) {
   const t = String(v ?? "").trim();
@@ -21,7 +22,7 @@ function parseNumberOrNull(v) {
  */
 async function reverseGeocodeNominatim({ lat, lng }) {
   const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
-  const resp = await fetch(url, {
+  const resp = await fetchClient(url, {
     headers: {
       // Provide a simple identifier; some deployments may ignore it, but it's polite.
       "Accept": "application/json",

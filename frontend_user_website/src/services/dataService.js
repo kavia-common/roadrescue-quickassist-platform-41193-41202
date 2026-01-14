@@ -1,4 +1,6 @@
 import { normalizeStatus } from "./statusUtils";
+import { appConfig } from "../config/appConfig";
+import { mockDataService } from "../mocks/mockDataService";
 import { supabase, isSupabaseConfigured as isSupabaseConfiguredClient } from "./supabaseClient";
 
 const LS_KEYS = {
@@ -103,11 +105,14 @@ function setLocalRequests(reqs) {
 
 // PUBLIC_INTERFACE
 function isSupabaseConfigured() {
-  /** Returns true only when required REACT_APP_ Supabase env vars are present (React build-time). */
+  /** Returns true only when required REACT_APP_ Supabase env vars are present (React build-time) AND mock mode is disabled. */
+  if (appConfig.isMockMode) return false;
   return isSupabaseConfiguredClient();
 }
 
 function getSupabase() {
+  // In explicit MOCK MODE, never touch supabase client (prevents any network/auth initialization behavior).
+  if (appConfig.isMockMode) return null;
   // Use shared singleton client. If env vars missing, this is null (mock mode).
   return supabase;
 }
@@ -168,6 +173,8 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async register(email, password) {
+    if (appConfig.isMockMode) return mockDataService.register(email, password);
+
     ensureSeedData();
     const supa = getSupabase();
     if (supa) {
@@ -194,6 +201,8 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async login(email, password) {
+    if (appConfig.isMockMode) return mockDataService.login(email, password);
+
     ensureSeedData();
     const supa = getSupabase();
     if (supa) {
@@ -214,6 +223,8 @@ export const dataService = {
   // PUBLIC_INTERFACE
   async loginWithGoogle({ redirectTo } = {}) {
     /** Starts Supabase OAuth sign-in with Google (Supabase mode only). */
+    if (appConfig.isMockMode) return mockDataService.loginWithGoogle();
+
     const supa = getSupabase();
     if (!supa) {
       throw new Error("Supabase is not configured. Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_KEY to enable Google sign-in.");
@@ -235,6 +246,8 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async logout() {
+    if (appConfig.isMockMode) return mockDataService.logout();
+
     const supa = getSupabase();
     if (supa) {
       await supa.auth.signOut();
@@ -245,6 +258,8 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async getCurrentUser() {
+    if (appConfig.isMockMode) return mockDataService.getCurrentUser();
+
     ensureSeedData();
     const supa = getSupabase();
     if (supa) {
@@ -271,6 +286,8 @@ export const dataService = {
      * Returns an unsubscribe function.
      * No-op in mock mode.
      */
+    if (appConfig.isMockMode) return mockDataService.subscribeToAuthChanges(onUserChanged);
+
     const supa = getSupabase();
     if (!supa) return () => {};
 
@@ -282,11 +299,7 @@ export const dataService = {
         onUserChanged?.(next);
       } catch {
         // If role/profile fetch fails, still set basic identity to avoid blocking UX.
-        onUserChanged?.(
-          session?.user
-            ? { id: session.user.id, email: session.user.email, role: "user", approved: true }
-            : null
-        );
+        onUserChanged?.(session?.user ? { id: session.user.id, email: session.user.email, role: "user", approved: true } : null);
       }
     });
 
@@ -294,7 +307,40 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
+  async getProfile(userId) {
+    /** Returns a basic profile for the logged-in user. */
+    if (appConfig.isMockMode) return mockDataService.getProfile(userId);
+
+    const supa = getSupabase();
+    // If Supabase is enabled but profiles table isn't, fall back to current user identity.
+    if (!supa) {
+      const u = await this.getCurrentUser();
+      if (!u) throw new Error("Not authenticated.");
+      return { id: u.id, email: u.email, role: u.role, approved: u.approved, profile: u.profile || {} };
+    }
+
+    try {
+      const { data, error } = await supa.from("profiles").select("*").eq("id", userId).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("Profile not found.");
+      return {
+        id: data.id,
+        email: data.email || "",
+        role: data.role || "user",
+        approved: data.approved ?? true,
+        profile: data.profile || {},
+      };
+    } catch {
+      const u = await this.getCurrentUser();
+      if (!u) throw new Error("Not authenticated.");
+      return { id: u.id, email: u.email, role: u.role, approved: u.approved, profile: u.profile || {} };
+    }
+  },
+
+  // PUBLIC_INTERFACE
   async listRequests({ forUserId } = {}) {
+    if (appConfig.isMockMode) return mockDataService.listRequests({ forUserId });
+
     ensureSeedData();
     const supa = getSupabase();
     if (supa) {
@@ -356,6 +402,8 @@ export const dataService = {
 
   // PUBLIC_INTERFACE
   async createRequest({ user, vehicle, issueDescription, contact }) {
+    if (appConfig.isMockMode) return mockDataService.createRequest({ user, vehicle, issueDescription, contact });
+
     ensureSeedData();
     const supa = getSupabase();
     const nowIso = new Date().toISOString();
