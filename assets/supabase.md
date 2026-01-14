@@ -13,9 +13,9 @@ All three apps can run in **mock mode** (localStorage) or **Supabase mode** (aut
 Each frontend reads:
 
 - `REACT_APP_SUPABASE_URL`
-- `REACT_APP_SUPABASE_KEY`
+- `REACT_APP_SUPABASE_ANON_KEY`
 
-If either is missing/empty, the app automatically falls back to **mock mode**.
+If either is missing/empty, the app will fail fast (these apps are Supabase-first and should not silently fall back to mock mode for production usage).
 
 ## Tables (recommended)
 

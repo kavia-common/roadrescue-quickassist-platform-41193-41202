@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
 
 import { Navbar } from "./components/layout/Navbar";
@@ -7,6 +7,7 @@ import { Footer } from "./components/layout/Footer";
 import { RequireAuth } from "./routes/RequireAuth";
 import { dataService } from "./services/dataService";
 import { appConfig } from "./config/appConfig";
+import { withTimeout } from "./utils/withTimeout";
 
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -16,27 +17,37 @@ import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { AboutPage } from "./pages/AboutPage";
 import { TwilioSmsDemoCard } from "./components/demo/TwilioSmsDemoCard";
 
-function withTimeout(promise, ms, label = "operation") {
-  let timerId = null;
-
-  const timeoutPromise = new Promise((_, reject) => {
-    timerId = window.setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-  });
-
-  return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timerId) window.clearTimeout(timerId);
-  });
+function getRouteStateMessage(location) {
+  const raw = location?.state?.message;
+  return typeof raw === "string" ? raw : "";
 }
 
-// PUBLIC_INTERFACE
-function App() {
-  /** User website entry: Supabase auth + request submission + status tracking. */
+/**
+ * Internal component that performs auth boot and handles redirects.
+ * This is nested under BrowserRouter so we can use navigation hooks.
+ */
+function AppShell() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [user, setUser] = useState(null);
-  const [booted, setBooted] = useState(false);
+
+  // Boot should NEVER freeze UI. We render immediately and just show login/protected routes accordingly.
+  const [bootResolved, setBootResolved] = useState(false);
   const [bootError, setBootError] = useState("");
+
+  const routeMessage = useMemo(() => getRouteStateMessage(location), [location]);
 
   useEffect(() => {
     let mounted = true;
+
+    // Always subscribe immediately so even if getUser hangs, auth events can still update UI.
+    const unsubscribe = dataService.subscribeToAuthChanges((nextUser) => {
+      if (!mounted) return;
+      setUser(nextUser);
+      // If an auth event arrived, consider boot resolved.
+      setBootResolved(true);
+    });
 
     (async () => {
       try {
@@ -45,93 +56,111 @@ function App() {
         setUser(u);
       } catch (e) {
         if (!mounted) return;
+
+        const msg =
+          e?.message ||
+          "We couldn’t initialize your session. Please log in again.";
         setUser(null);
-        setBootError(e?.message || "Unable to initialize authentication.");
+        setBootError(msg);
+
+        // Redirect to login with a friendly message.
+        // Do not trap the app on a loading screen.
+        navigate("/login", { replace: true, state: { message: msg } });
       } finally {
-        if (mounted) setBooted(true);
+        if (mounted) setBootResolved(true);
       }
     })();
-
-    const unsubscribe = dataService.subscribeToAuthChanges((nextUser) => {
-      if (!mounted) return;
-      setUser(nextUser);
-    });
 
     return () => {
       mounted = false;
       unsubscribe?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!booted) {
-    return (
-      <div className="app-shell">
-        <div className="container">
-          <div className="skeleton">Loading…</div>
-        </div>
-      </div>
-    );
-  }
+  // Prefer route-provided message (redirect), else boot error.
+  const effectiveBootError = routeMessage || bootError;
 
+  // Non-blocking UI: no full-screen loading gate.
+  // If boot isn't resolved yet, routes still render; RequireAuth will redirect to /login for protected pages.
+  // This prevents "stuck on Loading…" in environments where auth calls hang.
+  return (
+    <div className="app-shell">
+      <Navbar user={user} />
+      <main className="main">
+        <Routes>
+          <Route path="/" element={<Navigate to={user ? "/submit" : "/login"} replace />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route
+            path="/login"
+            element={
+              user ? (
+                <Navigate to="/submit" replace />
+              ) : (
+                <LoginPage
+                  onAuthed={setUser}
+                  bootError={effectiveBootError}
+                  bootResolved={bootResolved}
+                />
+              )
+            }
+          />
+          <Route path="/register" element={user ? <Navigate to="/submit" replace /> : <RegisterPage onAuthed={setUser} />} />
+
+          <Route
+            path="/submit"
+            element={
+              <RequireAuth user={user}>
+                <SubmitRequestPage user={user} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/requests"
+            element={
+              <RequireAuth user={user}>
+                <MyRequestsPage user={user} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/requests/:requestId"
+            element={
+              <RequireAuth user={user}>
+                <RequestDetailPage user={user} />
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/demo-sms"
+            element={
+              <RequireAuth user={user}>
+                <div className="container">
+                  <div className="hero">
+                    <h1 className="h1">SMS Demo</h1>
+                    <p className="lead">Simulate the “Mechanic accepts job” event.</p>
+                  </div>
+                  <TwilioSmsDemoCard title="Mechanic accepts job (Demo)" />
+                </div>
+              </RequireAuth>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+// PUBLIC_INTERFACE
+function App() {
+  /** User website entry: Supabase auth + request submission + status tracking. */
   return (
     <BrowserRouter>
-      <div className="app-shell">
-        <Navbar user={user} />
-        <main className="main">
-          <Routes>
-            <Route path="/" element={<Navigate to={user ? "/submit" : "/login"} replace />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route
-              path="/login"
-              element={user ? <Navigate to="/submit" replace /> : <LoginPage onAuthed={setUser} bootError={bootError} />}
-            />
-            <Route path="/register" element={user ? <Navigate to="/submit" replace /> : <RegisterPage onAuthed={setUser} />} />
-
-            <Route
-              path="/submit"
-              element={
-                <RequireAuth user={user}>
-                  <SubmitRequestPage user={user} />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/requests"
-              element={
-                <RequireAuth user={user}>
-                  <MyRequestsPage user={user} />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/requests/:requestId"
-              element={
-                <RequireAuth user={user}>
-                  <RequestDetailPage user={user} />
-                </RequireAuth>
-              }
-            />
-
-            <Route
-              path="/demo-sms"
-              element={
-                <RequireAuth user={user}>
-                  <div className="container">
-                    <div className="hero">
-                      <h1 className="h1">SMS Demo</h1>
-                      <p className="lead">Simulate the “Mechanic accepts job” event.</p>
-                    </div>
-                    <TwilioSmsDemoCard title="Mechanic accepts job (Demo)" />
-                  </div>
-                </RequireAuth>
-              }
-            />
-
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
+      <AppShell />
     </BrowserRouter>
   );
 }

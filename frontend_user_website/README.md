@@ -19,7 +19,7 @@ This app uses **Supabase directly from the browser** for:
 ### Required environment variables
 
 - `REACT_APP_SUPABASE_URL`
-- `REACT_APP_SUPABASE_KEY`
+- `REACT_APP_SUPABASE_ANON_KEY`
 
 If these are missing, the app will fail fast with a clear error (mock/demo mode has been removed).
 

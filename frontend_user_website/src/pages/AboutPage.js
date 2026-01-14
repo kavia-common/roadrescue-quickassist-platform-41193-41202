@@ -23,7 +23,7 @@ export function AboutPage() {
           <li>No demo users or offline/localStorage mock mode is included.</li>
         </ul>
         <div className="note">
-          Required env vars: <code>REACT_APP_SUPABASE_URL</code> and <code>REACT_APP_SUPABASE_KEY</code>.
+          Required env vars: <code>REACT_APP_SUPABASE_URL</code> and <code>REACT_APP_SUPABASE_ANON_KEY</code>.
         </div>
       </Card>
     </div>

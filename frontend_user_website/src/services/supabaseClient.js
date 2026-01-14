@@ -4,7 +4,7 @@ import { appConfig } from "../config/appConfig";
 function assertSupabaseConfigured() {
   if (!appConfig.supabaseUrl || !appConfig.supabaseAnonKey) {
     throw new Error(
-      "Supabase is not configured. Please set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_KEY."
+      "Supabase is not configured. Please set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY."
     );
   }
 }

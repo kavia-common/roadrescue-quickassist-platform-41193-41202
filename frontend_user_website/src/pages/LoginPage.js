@@ -1,12 +1,14 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { dataService } from "../services/dataService";
 
-// PUBLIC_INTERFACE
-export function LoginPage({ onAuthed, bootError = "" }) {
+/**
+ * PUBLIC_INTERFACE
+ */
+export function LoginPage({ onAuthed, bootError = "", bootResolved = true }) {
   /** Login page for users. */
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -14,6 +16,11 @@ export function LoginPage({ onAuthed, bootError = "" }) {
   const [error, setError] = useState(bootError || "");
   const [busy, setBusy] = useState(false);
   const [oauthBusy, setOauthBusy] = useState(false);
+
+  useEffect(() => {
+    // Keep local error banner aligned with boot failures / redirect message.
+    setError(bootError || "");
+  }, [bootError]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -68,6 +75,12 @@ export function LoginPage({ onAuthed, bootError = "" }) {
         </div>
 
         <form onSubmit={submit} className="form">
+          {!bootResolved ? (
+            <div className="alert" style={{ background: "rgba(37,99,235,0.06)" }}>
+              Checking your session… You can still log in if this takes too long.
+            </div>
+          ) : null}
+
           <Input label="Email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={oauthBusy} />
           <Input
             label="Password"
