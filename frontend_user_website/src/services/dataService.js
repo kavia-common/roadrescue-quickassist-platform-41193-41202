@@ -181,6 +181,24 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
+  async getUserFromSession() {
+    /**
+     * Returns current authenticated user or null using `supabase.auth.getSession()`.
+     *
+     * Why session-first:
+     * - Recommended for app boot: it reads the cached session quickly
+     * - Avoids some edge cases where getUser can hang during initialization in preview environments
+     */
+    const supabase = getSupabase();
+    const { data, error } = await supabase.auth.getSession();
+    if (error) return null;
+
+    const u = data?.session?.user;
+    if (!u) return null;
+    return supaUserToAppUser(u);
+  },
+
+  // PUBLIC_INTERFACE
   async getCurrentUser() {
     /** Returns current authenticated user or null. */
     const supabase = getSupabase();
