@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
@@ -6,6 +6,7 @@ import { Button } from "../components/ui/Button";
 import { MapView } from "../components/MapView";
 import { dataService } from "../services/dataService";
 import { fetchClient } from "../utils/fetchClient";
+import { withTimeout } from "../utils/withTimeout";
 
 function parseNumberOrNull(v) {
   const t = String(v ?? "").trim();
@@ -25,7 +26,7 @@ async function reverseGeocodeNominatim({ lat, lng }) {
   const resp = await fetchClient(url, {
     headers: {
       // Provide a simple identifier; some deployments may ignore it, but it's polite.
-      "Accept": "application/json",
+      Accept: "application/json",
     },
   });
   if (!resp.ok) throw new Error(`Reverse geocoding failed (${resp.status}).`);
@@ -53,13 +54,37 @@ function formatCoord(n) {
   return n.toFixed(6);
 }
 
+function isPermissionDenied(err) {
+  // Standard codes: 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
+  return Number(err?.code) === 1;
+}
+
 function geolocationErrorToMessage(err) {
   if (!err) return "Unable to access location.";
   // Standard codes: 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
-  if (err.code === 1) return "Location permission was denied. Please allow access and try again.";
-  if (err.code === 2) return "Location information is unavailable on this device/network.";
-  if (err.code === 3) return "Timed out while fetching location. Please try again.";
+  if (Number(err.code) === 1) {
+    return "Location permission was denied. Please enable location in your browser settings and click Retry, or enter your location manually.";
+  }
+  if (Number(err.code) === 2) return "Location information is unavailable on this device/network.";
+  if (Number(err.code) === 3) return "Timed out while fetching location. Please try again.";
   return err.message || "Unable to access location.";
+}
+
+/**
+ * Best-effort permission precheck.
+ * Returns: "granted" | "denied" | "prompt" | "unknown"
+ */
+async function getGeolocationPermissionState() {
+  try {
+    // Some browsers don't implement navigator.permissions; keep it optional.
+    if (!navigator?.permissions?.query) return "unknown";
+    const res = await navigator.permissions.query({ name: "geolocation" });
+    const state = String(res?.state || "").toLowerCase();
+    if (state === "granted" || state === "denied" || state === "prompt") return state;
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 // PUBLIC_INTERFACE
@@ -81,6 +106,13 @@ export function SubmitRequestPage({ user }) {
 
   // UX state for "Find My Location"
   const [locating, setLocating] = useState(false);
+
+  /**
+   * Inline non-blocking notice near Location / landmark field.
+   * This is intentionally separate from the existing "locationStatus" toast-like banner.
+   */
+  const [geoPermissionNotice, setGeoPermissionNotice] = useState({ visible: false, message: "" });
+
   const [locationStatus, setLocationStatus] = useState({ type: "", message: "" }); // type: success|error|info
 
   const parsedLat = useMemo(() => parseNumberOrNull(latText), [latText]);
@@ -90,6 +122,8 @@ export function SubmitRequestPage({ user }) {
     if (parsedLat == null || parsedLng == null) return null;
     return { lat: parsedLat, lng: parsedLng };
   }, [parsedLat, parsedLng]);
+
+  const locateAttemptIdRef = useRef(0);
 
   const validate = () => {
     if (!vehicle.make.trim()) return "Vehicle make is required.";
@@ -109,20 +143,64 @@ export function SubmitRequestPage({ user }) {
     return "";
   };
 
+  useEffect(() => {
+    // Preemptively show guidance if permission is already blocked (when supported).
+    // Do not block or attempt geolocation here; just show a helpful inline notice.
+    let mounted = true;
+    (async () => {
+      const state = await getGeolocationPermissionState();
+      if (!mounted) return;
+
+      if (state === "denied") {
+        // eslint-disable-next-line no-console
+        console.info("[Geolocation] PermissionStatus is 'denied' (precheck). Showing inline guidance.");
+        setGeoPermissionNotice({
+          visible: true,
+          message:
+            "Location permission was denied. Please enable location in your browser settings and click Retry, or enter your location manually.",
+        });
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const onFindMyLocation = async () => {
+    // Each click increments an attempt id so late async results don't overwrite newer attempts.
+    locateAttemptIdRef.current += 1;
+    const attemptId = locateAttemptIdRef.current;
+
     setError("");
     setLocationStatus({ type: "", message: "" });
 
     if (!("geolocation" in navigator)) {
-      setLocationStatus({
-        type: "error",
-        message: "Geolocation is not supported by this browser. Please enter location manually.",
+      // eslint-disable-next-line no-console
+      console.info("[Geolocation] Not supported by this browser.");
+      setGeoPermissionNotice({ visible: true, message: "Geolocation is not supported by this browser. Please enter location manually." });
+      return;
+    }
+
+    // If permissions API is available and indicates a permanent deny, do not attempt geolocation.
+    // Still allow Retry to attempt again (some users may change settings and come back).
+    const preState = await getGeolocationPermissionState();
+    if (preState === "denied") {
+      // eslint-disable-next-line no-console
+      console.info("[Geolocation] PermissionStatus is 'denied' (preempt). Skipping getCurrentPosition.");
+      setGeoPermissionNotice({
+        visible: true,
+        message:
+          "Location permission was denied. Please enable location in your browser settings and click Retry, or enter your location manually.",
       });
       return;
     }
 
     setLocating(true);
     try {
+      // eslint-disable-next-line no-console
+      console.info("[Geolocation] Requesting current position…");
+
       const coords = await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(
           (pos) => resolve(pos.coords),
@@ -135,6 +213,9 @@ export function SubmitRequestPage({ user }) {
         );
       });
 
+      // If a newer attempt happened, ignore this result.
+      if (attemptId !== locateAttemptIdRef.current) return;
+
       const lat = Number(coords.latitude);
       const lng = Number(coords.longitude);
 
@@ -142,19 +223,30 @@ export function SubmitRequestPage({ user }) {
         throw new Error("Could not read valid coordinates from the device.");
       }
 
+      // eslint-disable-next-line no-console
+      console.info("[Geolocation] Success:", { lat, lng });
+
+      // Successful geolocation: clear permission notice and errors
+      setGeoPermissionNotice({ visible: false, message: "" });
+
       // 1) Update coords (drives MapView center+marker)
       setLatText(formatCoord(lat));
       setLngText(formatCoord(lng));
 
-      // 2) Reverse-geocode best-effort; fall back to coord label
+      // 2) Reverse-geocode best-effort with timeout; fall back to coord label
       let resolvedLabel = "";
       try {
-        resolvedLabel = await reverseGeocodeNominatim({ lat, lng });
-      } catch {
-        // Ignore reverse-geocode errors; we still have coordinates.
+        // Ensure denial or a stalled network call never leaves the UI in a "locating" hang.
+        resolvedLabel = await withTimeout(reverseGeocodeNominatim({ lat, lng }), 4500, "Reverse geocoding");
+      } catch (revErr) {
+        // eslint-disable-next-line no-console
+        console.info("[Geolocation] Reverse geocoding skipped/failed (non-blocking):", revErr?.message || revErr);
       }
 
       const fallbackLabel = `Current Location (${formatCoord(lat)}, ${formatCoord(lng)})`;
+
+      // IMPORTANT: keep manual entry functional and do not clear existing input.
+      // We only set location text on success; on denial we leave it unchanged.
       setLocationText(resolvedLabel || fallbackLabel);
 
       // 3) Trigger validation after setting value (if any location-related errors were showing)
@@ -166,12 +258,28 @@ export function SubmitRequestPage({ user }) {
         message: "Location updated from your current position.",
       });
     } catch (e) {
-      setLocationStatus({
-        type: "error",
-        message: geolocationErrorToMessage(e),
-      });
+      if (attemptId !== locateAttemptIdRef.current) return;
+
+      // eslint-disable-next-line no-console
+      console.error("[Geolocation] Failed:", e);
+
+      if (isPermissionDenied(e)) {
+        // Requirement: non-blocking inline notice near location field, with Retry button.
+        setGeoPermissionNotice({
+          visible: true,
+          message:
+            "Location permission was denied. Please enable location in your browser settings and click Retry, or enter your location manually.",
+        });
+
+        // Keep UI clean: do not show a big blocking error banner for this case.
+        setLocationStatus({ type: "", message: "" });
+      } else {
+        // Other geolocation errors can still be shown in existing status area.
+        setLocationStatus({ type: "error", message: geolocationErrorToMessage(e) });
+      }
     } finally {
-      setLocating(false);
+      // Always resolve loading state; never leave spinner lingering.
+      if (attemptId === locateAttemptIdRef.current) setLocating(false);
     }
   };
 
@@ -294,9 +402,17 @@ export function SubmitRequestPage({ user }) {
                   disabled={locating}
                   style={{ whiteSpace: "nowrap" }}
                 >
-                  {locating ? "Locating…" : "Find My Location"}
+                  {locating ? "Locating…" : geoPermissionNotice.visible ? "Retry" : "Find My Location"}
                 </Button>
               </div>
+
+              {geoPermissionNotice.visible ? (
+                <div className="alert alert-info" style={{ marginTop: 8 }}>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>Location permission needed</div>
+                  <div style={{ lineHeight: 1.35 }}>{geoPermissionNotice.message}</div>
+                </div>
+              ) : null}
+
               <div id="locationHint" className="hint">
                 Optional: add a short landmark or area name, or use <strong>Find My Location</strong> to auto-fill.
               </div>
@@ -325,17 +441,20 @@ export function SubmitRequestPage({ user }) {
           </div>
 
           {locationStatus.message ? (
-            <div className={`alert ${locationStatus.type === "success" ? "alert-success" : locationStatus.type === "error" ? "alert-error" : "alert-info"}`}>
+            <div
+              className={`alert ${
+                locationStatus.type === "success"
+                  ? "alert-success"
+                  : locationStatus.type === "error"
+                    ? "alert-error"
+                    : "alert-info"
+              }`}
+            >
               {locationStatus.message}
             </div>
           ) : null}
 
-          <MapView
-            center={marker || undefined}
-            marker={marker || undefined}
-            height={280}
-            ariaLabel="Selected location map"
-          />
+          <MapView center={marker || undefined} marker={marker || undefined} height={280} ariaLabel="Selected location map" />
 
           {locationText.trim() ? (
             <div className="hint" style={{ marginTop: -6 }}>
