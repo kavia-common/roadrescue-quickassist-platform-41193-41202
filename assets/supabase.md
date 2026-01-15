@@ -65,7 +65,16 @@ requests (
   longitude double precision,
 
   status text not null default 'pending'
-    check (status in ('pending','assigned','en_route','completed','canceled')),
+    check (status in (
+      'pending',
+      'submitted',
+      'in_review',
+      'assigned',
+      'accepted',
+      'en_route',
+      'completed',
+      'canceled'
+    )),
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -73,6 +82,7 @@ requests (
 ```
 
 Important:
+- The user website must NOT set `requests.status` on insert. It should rely on the database default (`'pending'`) to ensure inserts always satisfy the CHECK constraint and to prevent users from choosing non-initial statuses client-side.
 - The project may have legacy columns (`lat/lon`, etc.). The user website can use either, but the contract uses `latitude/longitude`.
 - `vehicle_year` was converted to `int4` when safe.
 

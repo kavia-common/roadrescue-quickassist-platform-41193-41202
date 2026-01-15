@@ -1,12 +1,23 @@
 /**
  * Shared request status utilities (User Website).
  *
- * Supabase canonical values:
+ * UI canonical values (what the UI uses internally):
  * - OPEN
  * - ASSIGNED
  * - EN_ROUTE
  * - WORKING
  * - COMPLETED
+ * - CANCELED
+ *
+ * Database canonical values (what Supabase stores in public.requests.status):
+ * - pending (initial)
+ * - submitted
+ * - in_review
+ * - assigned
+ * - accepted
+ * - en_route
+ * - completed
+ * - canceled
  */
 
 /**
@@ -22,14 +33,18 @@ export function normalizeStatus(rawStatus) {
   const compact = upper.replace(/\s+/g, "_");
 
   const map = {
+    // Initial / intake
+    PENDING: "OPEN",
     OPEN: "OPEN",
     SUBMITTED: "OPEN",
     IN_REVIEW: "OPEN",
     "IN REVIEW": "OPEN",
 
+    // Assignment
     ASSIGNED: "ASSIGNED",
     ACCEPTED: "ASSIGNED",
 
+    // Travel / work
     EN_ROUTE: "EN_ROUTE",
     "EN ROUTE": "EN_ROUTE",
 
@@ -37,8 +52,12 @@ export function normalizeStatus(rawStatus) {
     IN_PROGRESS: "WORKING",
     "IN PROGRESS": "WORKING",
 
+    // Terminal
     COMPLETED: "COMPLETED",
     CLOSED: "COMPLETED",
+
+    CANCELED: "CANCELED",
+    CANCELLED: "CANCELED",
   };
 
   return map[compact] || map[upper] || compact;
@@ -56,6 +75,7 @@ export function statusLabel(rawStatus) {
     EN_ROUTE: "En Route",
     WORKING: "Working",
     COMPLETED: "Completed",
+    CANCELED: "Canceled",
   };
   return labels[canonical] || canonical.replace(/_/g, " ");
 }
@@ -72,6 +92,7 @@ export function statusBadgeClass(rawStatus) {
     EN_ROUTE: "badge badge-amber",
     WORKING: "badge badge-amber",
     COMPLETED: "badge badge-green",
+    CANCELED: "badge badge-red",
   };
   return map[canonical] || "badge";
 }

@@ -339,7 +339,17 @@ export const dataService = {
       vehicle: safeVehicle,
       issue_description: issueDescription,
       contact: safeContact,
-      status: "open",
+
+      /**
+       * IMPORTANT:
+       * Do not send `status` from the user website.
+       *
+       * The database enforces a CHECK constraint on public.requests.status and
+       * sets the initial value via DEFAULT (expected: 'pending').
+       *
+       * Sending legacy values like 'open' can violate the constraint and cause
+       * inserts to fail. The UI should treat 'pending' as the initial/open state.
+       */
       assigned_mechanic_id: null,
       assigned_mechanic_email: null,
       notes: [],
