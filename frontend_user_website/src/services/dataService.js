@@ -346,48 +346,62 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
-  async createRequest({ user, vehicle, issueDescription, contact, location, status } = {}) {
+  async createRequest({ vehicle, issueDescription, address, latitude, longitude } = {}) {
+    /**
+     * Create a new breakdown request for the currently authenticated user.
+     *
+     * Enforced insert shape (DO NOT CHANGE without updating DB policies/constraints):
+     *
+     * const { data: { user } } = await supabase.auth.getUser();
+     * await supabase.from('requests').insert({
+     *   user_id: user.id,   // REQUIRED
+     *   status: 'open',     // REQUIRED
+     *   vehicle_type,
+     *   issue_description,
+     *   address,
+     *   latitude,
+     *   longitude
+     * });
+     */
     const supabase = getSupabase();
-    const nowIso = new Date().toISOString();
 
-    const safeVehicle = {
-      make: vehicle && typeof vehicle.make === "string" ? vehicle.make : "",
-      model: vehicle && typeof vehicle.model === "string" ? vehicle.model : "",
-    };
-    const safeContact = {
-      name: contact?.name || "",
-      phone: contact?.phone || "",
-    };
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    const safeLat = typeof location?.lat === "number" && Number.isFinite(location.lat) ? location.lat : null;
-    const safeLon = typeof location?.lon === "number" && Number.isFinite(location.lon) ? location.lon : null;
-    const safeAddress = typeof location?.address === "string" ? location.address.trim() : "";
+    if (userError) throw new Error(userError.message || "Could not fetch current user session.");
+    if (!user?.id) throw new Error("You must be logged in to submit a request.");
 
-    // Caller may accidentally pass status (or defaults elsewhere). User-side creation MUST be 'open'.
-    // We intentionally accept `status` in the signature to make this overwrite explicit and robust.
-    void status;
+    const vehicle_type = typeof vehicle === "string" ? vehicle.trim() : "";
+    const issue_description = typeof issueDescription === "string" ? issueDescription.trim() : "";
+    const safeAddress = typeof address === "string" ? address.trim() : "";
 
-    const insertPayload = forceUserCreateStatusOpen({
-      created_at: nowIso,
-      user_id: user.id,
-      user_email: user.email,
-      vehicle: safeVehicle,
-      issue_description: issueDescription,
-      contact: safeContact,
-      assigned_mechanic_id: null,
-      assigned_mechanic_email: null,
-      notes: [],
+    const safeLatitude = typeof latitude === "number" && Number.isFinite(latitude) ? latitude : null;
+    const safeLongitude = typeof longitude === "number" && Number.isFinite(longitude) ? longitude : null;
 
-      // NEW: address-based geocoding fields
-      lat: safeLat,
-      lon: safeLon,
+    if (!vehicle_type) throw new Error("Vehicle type is required.");
+    if (!issue_description) throw new Error("Issue description is required.");
+    if (!safeAddress) throw new Error("Address is required.");
+    if (safeLatitude == null || safeLongitude == null) {
+      throw new Error("Latitude and longitude are required.");
+    }
+
+    // IMPORTANT: exact payload shape, no spreads, no extra keys.
+    const { data, error } = await supabase.from("requests").insert({
+      user_id: user.id, // REQUIRED
+      status: "open", // REQUIRED (forced)
+      vehicle_type,
+      issue_description,
       address: safeAddress,
-    });
+      latitude: safeLatitude,
+      longitude: safeLongitude,
+    }).select().maybeSingle();
 
-    const { data, error } = await supabase.from("requests").insert(insertPayload).select().maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw new Error("Failed to insert request.");
 
+    // Keep existing UI expectations by returning a best-effort normalized object.
     return {
       id: data.id,
       createdAt: data.created_at,
@@ -396,16 +410,10 @@ export const dataService = {
       vehicle: normalizeVehicle(data.vehicle, data),
       issueDescription: data.issue_description,
       contact: normalizeContact(data.contact, data),
-
-      // Normalize immediately for UI: treat newly created requests as OPEN even if DB returns 'open'
-      // (normalizeStatus maps to canonical tokens).
       status: normalizeStatus(data.status || "open"),
-
       assignedMechanicId: data.assigned_mechanic_id,
       assignedMechanicEmail: data.assigned_mechanic_email,
       notes: data.notes || [],
-
-      // NEW: location fields
       lat: typeof data.lat === "number" ? data.lat : data.lat != null ? Number(data.lat) : null,
       lon: typeof data.lon === "number" ? data.lon : data.lon != null ? Number(data.lon) : null,
       address: typeof data.address === "string" ? data.address : "",
