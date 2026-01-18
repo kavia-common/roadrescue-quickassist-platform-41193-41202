@@ -9,6 +9,14 @@ function getRequiredEnv(name) {
   return value;
 }
 
+function getFirstNonEmptyEnv(names) {
+  for (const name of names) {
+    const value = String(process.env[name] ?? "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
 /**
  * PUBLIC_INTERFACE
  */
@@ -21,13 +29,13 @@ export const appConfig = {
   /**
    * Supabase anon key (required).
    *
-   * IMPORTANT: This app must read ONLY:
-   * - REACT_APP_SUPABASE_URL
-   * - REACT_APP_SUPABASE_ANON_KEY
+   * Env var precedence:
+   * - REACT_APP_SUPABASE_ANON_KEY (preferred)
+   * - REACT_APP_SUPABASE_KEY (legacy fallback; some environments use this name for the anon key)
    *
-   * (Not REACT_APP_SUPABASE_KEY)
+   * NOTE: The service_role key must NEVER be used in the browser. Only anon/public key.
    */
-  supabaseAnonKey: getRequiredEnv("REACT_APP_SUPABASE_ANON_KEY"),
+  supabaseAnonKey: getFirstNonEmptyEnv(["REACT_APP_SUPABASE_ANON_KEY", "REACT_APP_SUPABASE_KEY"]),
 
   /**
    * Boot timeout in milliseconds. Prevents infinite loading if auth/session hangs.

@@ -22,13 +22,27 @@ let _supabase = null;
 function getSupabaseConfigStatus() {
   const missing = [];
   if (!appConfig.supabaseUrl) missing.push("REACT_APP_SUPABASE_URL");
-  if (!appConfig.supabaseAnonKey) missing.push("REACT_APP_SUPABASE_ANON_KEY");
+
+  // We allow a legacy fallback in appConfig, but we still message clearly.
+  if (!appConfig.supabaseAnonKey) {
+    missing.push("REACT_APP_SUPABASE_ANON_KEY (or REACT_APP_SUPABASE_KEY)");
+  }
 
   if (missing.length) {
     const message = `Supabase is not configured. Missing: ${missing.join(
       ", "
     )}. Please set these environment variables and rebuild the app.`;
     return { configured: false, missing, message };
+  }
+
+  // Lightweight sanity checks to prevent the most common “Invalid API key” confusion.
+  const urlOk = /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(appConfig.supabaseUrl);
+  const keyOk = appConfig.supabaseAnonKey.startsWith("eyJ"); // JWTs typically start with "eyJ"
+
+  if (!urlOk || !keyOk) {
+    const message =
+      "Supabase configuration looks incorrect. Please verify REACT_APP_SUPABASE_URL is your project URL (https://<ref>.supabase.co) and REACT_APP_SUPABASE_ANON_KEY is your project anon/public key (a JWT string). After updating env vars, restart/rebuild the app.";
+    return { configured: false, missing: [], message };
   }
 
   return { configured: true, missing: [], message: "" };

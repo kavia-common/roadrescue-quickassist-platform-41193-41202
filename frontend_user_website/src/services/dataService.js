@@ -102,6 +102,14 @@ function normalizeSupabaseAuthError(err) {
 
   if (!raw) return "Authentication failed.";
 
+  // Configuration/initialization problems (often show up as auth errors in the UI):
+  if (lower.includes("invalid api key") || lower.includes("invalid api key")) {
+    return "Supabase rejected the API key. Please verify REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY (or REACT_APP_SUPABASE_KEY) are set to your project’s URL and anon/public key, then restart the app.";
+  }
+  if (lower.includes("jwt malformed") || lower.includes("invalid jwt")) {
+    return "Supabase key appears malformed. Please re-check your REACT_APP_SUPABASE_ANON_KEY value and restart the app.";
+  }
+
   // Common cases:
   if (lower.includes("invalid login credentials")) return "Invalid email or password.";
   if (lower.includes("email not confirmed") || lower.includes("confirm your email")) {

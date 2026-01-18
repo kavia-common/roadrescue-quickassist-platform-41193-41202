@@ -12,11 +12,23 @@ import { Button } from "../ui/Button";
  * that holds Twilio credentials server-side.
  */
 
+function getEnvFirst(...names) {
+  for (const n of names) {
+    const v = String(process.env[n] || "").trim();
+    if (v) return v;
+  }
+  return "";
+}
+
 function getTwilioConfig() {
-  const accountSid = process.env.REACT_APP_TWILIO_ACCOUNT_SID || "";
-  const authToken = process.env.REACT_APP_TWILIO_AUTH_TOKEN || "";
-  const messagingServiceSid = process.env.REACT_APP_TWILIO_MESSAGING_SERVICE_SID || "";
-  const fromNumber = process.env.REACT_APP_TWILIO_FROM_NUMBER || "";
+  // Support both correct CRA names and the legacy/double-prefixed names found in some env files.
+  const accountSid = getEnvFirst("REACT_APP_TWILIO_ACCOUNT_SID", "REACT_APP_REACT_APP_TWILIO_ACCOUNT_SID");
+  const authToken = getEnvFirst("REACT_APP_TWILIO_AUTH_TOKEN", "REACT_APP_REACT_APP_TWILIO_AUTH_TOKEN");
+  const messagingServiceSid = getEnvFirst(
+    "REACT_APP_TWILIO_MESSAGING_SERVICE_SID",
+    "REACT_APP_REACT_APP_TWILIO_MESSAGING_SERVICE_SID"
+  );
+  const fromNumber = getEnvFirst("REACT_APP_TWILIO_FROM_NUMBER", "REACT_APP_REACT_APP_TWILIO_FROM_NUMBER");
 
   return { accountSid, authToken, messagingServiceSid, fromNumber };
 }
