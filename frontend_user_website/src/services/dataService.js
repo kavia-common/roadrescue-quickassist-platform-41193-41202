@@ -92,8 +92,14 @@ function forceUserCreateStatusOpen(payload) {
     delete safe.status;
   }
 
-  // DB constraint expects lowercase 'open' at insert time.
-  safe.status = "open";
+  /**
+   * DB constraint (requests_status_check) allows:
+   *   'pending','assigned','en_route','completed','canceled'
+   *
+   * We store 'pending' for a newly created request.
+   * The UI normalizes 'pending' -> 'OPEN' for display purposes.
+   */
+  safe.status = "pending";
   return safe;
 }
 
@@ -354,8 +360,8 @@ export const dataService = {
      *
      * const { data: { user } } = await supabase.auth.getUser();
      * await supabase.from('requests').insert({
-     *   user_id: user.id,   // REQUIRED
-     *   status: 'open',     // REQUIRED
+     *   user_id: user.id,     // REQUIRED
+     *   status: 'pending',    // REQUIRED (must satisfy DB check constraint)
      *   vehicle: vehicleType,
      *   issue_description,
      *   address,
@@ -364,7 +370,7 @@ export const dataService = {
      * });
      *
      * IMPORTANT:
-     * - status is ALWAYS forced to "open" (do not accept caller-provided status).
+     * - status is ALWAYS forced to "pending" (do not accept caller-provided status).
      * - Only whitelisted fields are sent to Supabase (no object spreads).
      * - Column name is `vehicle` (existing DB column), not `vehicle_type`.
      */
@@ -397,7 +403,7 @@ export const dataService = {
       .from("requests")
       .insert({
         user_id: user.id,
-        status: "open", // forced
+        status: "pending", // forced; must satisfy DB check constraint
         vehicle, // correct column
         issue_description,
         address: safeAddress,
@@ -419,7 +425,7 @@ export const dataService = {
       vehicle: normalizeVehicle(data.vehicle, data),
       issueDescription: data.issue_description,
       contact: normalizeContact(data.contact, data),
-      status: normalizeStatus(data.status || "open"),
+      status: normalizeStatus(data.status || "pending"),
       assignedMechanicId: data.assigned_mechanic_id,
       assignedMechanicEmail: data.assigned_mechanic_email,
       notes: data.notes || [],

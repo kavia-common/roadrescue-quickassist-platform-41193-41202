@@ -22,6 +22,10 @@ export function normalizeStatus(rawStatus) {
   const compact = upper.replace(/\s+/g, "_");
 
   const map = {
+    // DB canonical values
+    PENDING: "OPEN",
+
+    // UI/legacy values
     OPEN: "OPEN",
     SUBMITTED: "OPEN",
     IN_REVIEW: "OPEN",
