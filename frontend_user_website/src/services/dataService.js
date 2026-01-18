@@ -76,10 +76,22 @@ function normalizeContact(contact, row) {
 
 /**
  * Enforces DB constraint compliance for user-side request creation.
- * Any caller-provided status is ignored/overwritten to avoid invalid inserts.
+ *
+ * IMPORTANT:
+ * - We must never let a caller-provided `status` leak into the insert payload,
+ *   because the DB has a check constraint (`requests_status_check`).
+ * - We therefore *strip* any provided status and then set the canonical DB value
+ *   right before insert.
  */
 function forceUserCreateStatusOpen(payload) {
   const safe = payload && typeof payload === "object" ? { ...payload } : {};
+
+  // Strip any caller-provided status to prevent spread/merge bugs from reintroducing it.
+  // (Even if currently not used, this is defensive and ensures future changes remain safe.)
+  if ("status" in safe) {
+    delete safe.status;
+  }
+
   // DB constraint expects lowercase 'open' at insert time.
   safe.status = "open";
   return safe;
