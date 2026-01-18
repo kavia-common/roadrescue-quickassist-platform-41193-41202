@@ -346,7 +346,7 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
-  async createRequest({ vehicle, issueDescription, address, latitude, longitude } = {}) {
+  async createRequest({ vehicleType, issueDescription, address, latitude, longitude } = {}) {
     /**
      * Create a new breakdown request for the currently authenticated user.
      *
@@ -356,12 +356,17 @@ export const dataService = {
      * await supabase.from('requests').insert({
      *   user_id: user.id,   // REQUIRED
      *   status: 'open',     // REQUIRED
-     *   vehicle_type,
+     *   vehicle: vehicleType,
      *   issue_description,
      *   address,
      *   latitude,
      *   longitude
      * });
+     *
+     * IMPORTANT:
+     * - status is ALWAYS forced to "open" (do not accept caller-provided status).
+     * - Only whitelisted fields are sent to Supabase (no object spreads).
+     * - Column name is `vehicle` (existing DB column), not `vehicle_type`.
      */
     const supabase = getSupabase();
 
@@ -373,14 +378,14 @@ export const dataService = {
     if (userError) throw new Error(userError.message || "Could not fetch current user session.");
     if (!user?.id) throw new Error("You must be logged in to submit a request.");
 
-    const vehicle_type = typeof vehicle === "string" ? vehicle.trim() : "";
+    const vehicle = typeof vehicleType === "string" ? vehicleType.trim() : "";
     const issue_description = typeof issueDescription === "string" ? issueDescription.trim() : "";
     const safeAddress = typeof address === "string" ? address.trim() : "";
 
     const safeLatitude = typeof latitude === "number" && Number.isFinite(latitude) ? latitude : null;
     const safeLongitude = typeof longitude === "number" && Number.isFinite(longitude) ? longitude : null;
 
-    if (!vehicle_type) throw new Error("Vehicle type is required.");
+    if (!vehicle) throw new Error("Vehicle type is required.");
     if (!issue_description) throw new Error("Issue description is required.");
     if (!safeAddress) throw new Error("Address is required.");
     if (safeLatitude == null || safeLongitude == null) {
@@ -388,15 +393,19 @@ export const dataService = {
     }
 
     // IMPORTANT: exact payload shape, no spreads, no extra keys.
-    const { data, error } = await supabase.from("requests").insert({
-      user_id: user.id, // REQUIRED
-      status: "open", // REQUIRED (forced)
-      vehicle_type,
-      issue_description,
-      address: safeAddress,
-      latitude: safeLatitude,
-      longitude: safeLongitude,
-    }).select().maybeSingle();
+    const { data, error } = await supabase
+      .from("requests")
+      .insert({
+        user_id: user.id,
+        status: "open", // forced
+        vehicle, // correct column
+        issue_description,
+        address: safeAddress,
+        latitude: safeLatitude,
+        longitude: safeLongitude,
+      })
+      .select()
+      .maybeSingle();
 
     if (error) throw new Error(error.message);
     if (!data) throw new Error("Failed to insert request.");

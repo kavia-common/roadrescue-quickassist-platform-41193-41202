@@ -119,7 +119,7 @@ export function SubmitRequestPage({ user }) {
     setBusy(true);
     try {
       const req = await dataService.createRequest({
-        vehicle: `${vehicle.make || ""} ${vehicle.model || ""}`.trim(),
+        vehicleType: `${vehicle.make || ""} ${vehicle.model || ""}`.trim(),
         issueDescription,
         address: displayAddress || address.trim(),
         latitude: lat,
