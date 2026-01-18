@@ -74,6 +74,17 @@ function normalizeContact(contact, row) {
   };
 }
 
+/**
+ * Enforces DB constraint compliance for user-side request creation.
+ * Any caller-provided status is ignored/overwritten to avoid invalid inserts.
+ */
+function forceUserCreateStatusOpen(payload) {
+  const safe = payload && typeof payload === "object" ? { ...payload } : {};
+  // DB constraint expects lowercase 'open' at insert time.
+  safe.status = "open";
+  return safe;
+}
+
 /*
   FIELD MAPPING NOTES (MUST BE IDENTICAL ACROSS ALL 3 FRONTENDS/SERVICES)
 
@@ -323,7 +334,7 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
-  async createRequest({ user, vehicle, issueDescription, contact, location } = {}) {
+  async createRequest({ user, vehicle, issueDescription, contact, location, status } = {}) {
     const supabase = getSupabase();
     const nowIso = new Date().toISOString();
 
@@ -340,14 +351,17 @@ export const dataService = {
     const safeLon = typeof location?.lon === "number" && Number.isFinite(location.lon) ? location.lon : null;
     const safeAddress = typeof location?.address === "string" ? location.address.trim() : "";
 
-    const insertPayload = {
+    // Caller may accidentally pass status (or defaults elsewhere). User-side creation MUST be 'open'.
+    // We intentionally accept `status` in the signature to make this overwrite explicit and robust.
+    void status;
+
+    const insertPayload = forceUserCreateStatusOpen({
       created_at: nowIso,
       user_id: user.id,
       user_email: user.email,
       vehicle: safeVehicle,
       issue_description: issueDescription,
       contact: safeContact,
-      status: "open",
       assigned_mechanic_id: null,
       assigned_mechanic_email: null,
       notes: [],
@@ -356,7 +370,7 @@ export const dataService = {
       lat: safeLat,
       lon: safeLon,
       address: safeAddress,
-    };
+    });
 
     const { data, error } = await supabase.from("requests").insert(insertPayload).select().maybeSingle();
     if (error) throw new Error(error.message);
@@ -370,7 +384,11 @@ export const dataService = {
       vehicle: normalizeVehicle(data.vehicle, data),
       issueDescription: data.issue_description,
       contact: normalizeContact(data.contact, data),
-      status: normalizeStatus(data.status),
+
+      // Normalize immediately for UI: treat newly created requests as OPEN even if DB returns 'open'
+      // (normalizeStatus maps to canonical tokens).
+      status: normalizeStatus(data.status || "open"),
+
       assignedMechanicId: data.assigned_mechanic_id,
       assignedMechanicEmail: data.assigned_mechanic_email,
       notes: data.notes || [],
