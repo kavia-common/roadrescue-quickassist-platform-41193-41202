@@ -22,13 +22,54 @@ let _supabase = null;
 function getSupabaseConfigStatus() {
   const missing = [];
   if (!appConfig.supabaseUrl) missing.push("REACT_APP_SUPABASE_URL");
-  if (!appConfig.supabaseAnonKey) missing.push("REACT_APP_SUPABASE_ANON_KEY");
+
+  // We allow a legacy fallback in appConfig, but we still message clearly.
+  if (!appConfig.supabaseAnonKey) {
+    missing.push("REACT_APP_SUPABASE_ANON_KEY (or REACT_APP_SUPABASE_KEY)");
+  }
 
   if (missing.length) {
     const message = `Supabase is not configured. Missing: ${missing.join(
       ", "
     )}. Please set these environment variables and rebuild the app.`;
     return { configured: false, missing, message };
+  }
+
+  // Lightweight sanity checks to prevent the most common “Invalid API key” confusion.
+  const urlOk = /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(appConfig.supabaseUrl);
+  const keyLooksJwt = appConfig.supabaseAnonKey.startsWith("eyJ"); // JWTs typically start with "eyJ"
+
+  if (!urlOk || !keyLooksJwt) {
+    const message =
+      "Supabase configuration looks incorrect. Please verify REACT_APP_SUPABASE_URL is your project URL (https://<ref>.supabase.co) and REACT_APP_SUPABASE_ANON_KEY is your project anon/public key (a JWT string). After updating env vars, restart/rebuild the app.";
+    return { configured: false, missing: [], message };
+  }
+
+  // Extra helpful validation: anon/public keys usually include payload.role === "anon".
+  // If the JWT is malformed (e.g., wrong/typo claim), Supabase will reject it as an invalid API key.
+  try {
+    const parts = appConfig.supabaseAnonKey.split(".");
+    if (parts.length >= 2) {
+      const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const padded = payloadB64.padEnd(Math.ceil(payloadB64.length / 4) * 4, "=");
+      const payload = JSON.parse(atob(padded));
+      const role = payload?.role;
+
+      if (role !== "anon") {
+        const message =
+          "Supabase configuration error: the provided key does not look like an anon/public key. " +
+          "Please ensure REACT_APP_SUPABASE_ANON_KEY is the anon/public API key from Supabase (Project Settings → API → anon/public). " +
+          "If you set both REACT_APP_SUPABASE_ANON_KEY and REACT_APP_SUPABASE_KEY, ensure they match (a typo/corrupted value in ANON_KEY will override KEY). " +
+          "After updating env vars, restart/rebuild the app.";
+        return { configured: false, missing: [], message };
+      }
+    }
+  } catch {
+    // If we can't decode, Supabase will likely reject it anyway; provide a friendly message.
+    const message =
+      "Supabase configuration error: the provided anon key could not be decoded as a valid JWT. " +
+      "Please re-copy the anon/public key from Supabase and restart/rebuild the app.";
+    return { configured: false, missing: [], message };
   }
 
   return { configured: true, missing: [], message: "" };

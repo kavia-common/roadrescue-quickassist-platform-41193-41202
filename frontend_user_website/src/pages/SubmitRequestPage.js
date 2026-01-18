@@ -119,15 +119,11 @@ export function SubmitRequestPage({ user }) {
     setBusy(true);
     try {
       const req = await dataService.createRequest({
-        user,
-        vehicle,
+        vehicleType: `${vehicle.make || ""} ${vehicle.model || ""}`.trim(),
         issueDescription,
-        contact,
-        location: {
-          lat,
-          lon,
-          address: displayAddress || address.trim(),
-        },
+        address: displayAddress || address.trim(),
+        latitude: lat,
+        longitude: lon,
       });
 
       navigate(`/requests/${req.id}`);

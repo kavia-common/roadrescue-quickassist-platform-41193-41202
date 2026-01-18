@@ -74,6 +74,29 @@ function normalizeContact(contact, row) {
   };
 }
 
+/**
+ * Enforces DB constraint compliance for user-side request creation.
+ *
+ * IMPORTANT:
+ * - We must never let a caller-provided `status` leak into the insert payload,
+ *   because the DB has a check constraint (`requests_status_check`).
+ * - We therefore *strip* any provided status and then set the canonical DB value
+ *   right before insert.
+ */
+function forceUserCreateStatusOpen(payload) {
+  const safe = payload && typeof payload === "object" ? { ...payload } : {};
+
+  // Strip any caller-provided status to prevent spread/merge bugs from reintroducing it.
+  // (Even if currently not used, this is defensive and ensures future changes remain safe.)
+  if ("status" in safe) {
+    delete safe.status;
+  }
+
+  // DB constraint expects lowercase 'open' at insert time.
+  safe.status = "open";
+  return safe;
+}
+
 /*
   FIELD MAPPING NOTES (MUST BE IDENTICAL ACROSS ALL 3 FRONTENDS/SERVICES)
 
@@ -101,6 +124,14 @@ function normalizeSupabaseAuthError(err) {
   const lower = raw.toLowerCase();
 
   if (!raw) return "Authentication failed.";
+
+  // Configuration/initialization problems (often show up as auth errors in the UI):
+  if (lower.includes("invalid api key") || lower.includes("invalid api key")) {
+    return "Supabase rejected the API key. Please verify REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY (or REACT_APP_SUPABASE_KEY) are set to your project’s URL and anon/public key, then restart the app.";
+  }
+  if (lower.includes("jwt malformed") || lower.includes("invalid jwt")) {
+    return "Supabase key appears malformed. Please re-check your REACT_APP_SUPABASE_ANON_KEY value and restart the app.";
+  }
 
   // Common cases:
   if (lower.includes("invalid login credentials")) return "Invalid email or password.";
@@ -315,45 +346,71 @@ export const dataService = {
   },
 
   // PUBLIC_INTERFACE
-  async createRequest({ user, vehicle, issueDescription, contact, location } = {}) {
+  async createRequest({ vehicleType, issueDescription, address, latitude, longitude } = {}) {
+    /**
+     * Create a new breakdown request for the currently authenticated user.
+     *
+     * Enforced insert shape (DO NOT CHANGE without updating DB policies/constraints):
+     *
+     * const { data: { user } } = await supabase.auth.getUser();
+     * await supabase.from('requests').insert({
+     *   user_id: user.id,   // REQUIRED
+     *   status: 'open',     // REQUIRED
+     *   vehicle: vehicleType,
+     *   issue_description,
+     *   address,
+     *   latitude,
+     *   longitude
+     * });
+     *
+     * IMPORTANT:
+     * - status is ALWAYS forced to "open" (do not accept caller-provided status).
+     * - Only whitelisted fields are sent to Supabase (no object spreads).
+     * - Column name is `vehicle` (existing DB column), not `vehicle_type`.
+     */
     const supabase = getSupabase();
-    const nowIso = new Date().toISOString();
 
-    const safeVehicle = {
-      make: vehicle && typeof vehicle.make === "string" ? vehicle.make : "",
-      model: vehicle && typeof vehicle.model === "string" ? vehicle.model : "",
-    };
-    const safeContact = {
-      name: contact?.name || "",
-      phone: contact?.phone || "",
-    };
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    const safeLat = typeof location?.lat === "number" && Number.isFinite(location.lat) ? location.lat : null;
-    const safeLon = typeof location?.lon === "number" && Number.isFinite(location.lon) ? location.lon : null;
-    const safeAddress = typeof location?.address === "string" ? location.address.trim() : "";
+    if (userError) throw new Error(userError.message || "Could not fetch current user session.");
+    if (!user?.id) throw new Error("You must be logged in to submit a request.");
 
-    const insertPayload = {
-      created_at: nowIso,
-      user_id: user.id,
-      user_email: user.email,
-      vehicle: safeVehicle,
-      issue_description: issueDescription,
-      contact: safeContact,
-      status: "open",
-      assigned_mechanic_id: null,
-      assigned_mechanic_email: null,
-      notes: [],
+    const vehicle = typeof vehicleType === "string" ? vehicleType.trim() : "";
+    const issue_description = typeof issueDescription === "string" ? issueDescription.trim() : "";
+    const safeAddress = typeof address === "string" ? address.trim() : "";
 
-      // NEW: address-based geocoding fields
-      lat: safeLat,
-      lon: safeLon,
-      address: safeAddress,
-    };
+    const safeLatitude = typeof latitude === "number" && Number.isFinite(latitude) ? latitude : null;
+    const safeLongitude = typeof longitude === "number" && Number.isFinite(longitude) ? longitude : null;
 
-    const { data, error } = await supabase.from("requests").insert(insertPayload).select().maybeSingle();
+    if (!vehicle) throw new Error("Vehicle type is required.");
+    if (!issue_description) throw new Error("Issue description is required.");
+    if (!safeAddress) throw new Error("Address is required.");
+    if (safeLatitude == null || safeLongitude == null) {
+      throw new Error("Latitude and longitude are required.");
+    }
+
+    // IMPORTANT: exact payload shape, no spreads, no extra keys.
+    const { data, error } = await supabase
+      .from("requests")
+      .insert({
+        user_id: user.id,
+        status: "open", // forced
+        vehicle, // correct column
+        issue_description,
+        address: safeAddress,
+        latitude: safeLatitude,
+        longitude: safeLongitude,
+      })
+      .select()
+      .maybeSingle();
+
     if (error) throw new Error(error.message);
     if (!data) throw new Error("Failed to insert request.");
 
+    // Keep existing UI expectations by returning a best-effort normalized object.
     return {
       id: data.id,
       createdAt: data.created_at,
@@ -362,12 +419,10 @@ export const dataService = {
       vehicle: normalizeVehicle(data.vehicle, data),
       issueDescription: data.issue_description,
       contact: normalizeContact(data.contact, data),
-      status: normalizeStatus(data.status),
+      status: normalizeStatus(data.status || "open"),
       assignedMechanicId: data.assigned_mechanic_id,
       assignedMechanicEmail: data.assigned_mechanic_email,
       notes: data.notes || [],
-
-      // NEW: location fields
       lat: typeof data.lat === "number" ? data.lat : data.lat != null ? Number(data.lat) : null,
       lon: typeof data.lon === "number" ? data.lon : data.lon != null ? Number(data.lon) : null,
       address: typeof data.address === "string" ? data.address : "",
