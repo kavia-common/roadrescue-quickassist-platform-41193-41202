@@ -55,7 +55,8 @@ export function Navbar() {
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: "clamp(10px, 1.6vw, 12px)",
+            // Keep spacing proportional as the logo grows; slightly wider max keeps desktop balanced.
+            gap: "clamp(10px, 1.6vw, 14px)",
           }}
         >
           <img
@@ -64,7 +65,8 @@ export function Navbar() {
             style={{
               // Slightly larger logo for better visibility while keeping the navbar height stable.
               // Uses a responsive clamp so it scales down on smaller screens.
-              height: "clamp(32px, 4.5vw, 38px)",
+              // Increased ~6px from previous max (38px -> 44px).
+              height: "clamp(32px, 4.5vw, 44px)",
               width: "auto",
               aspectRatio: "1 / 1",
               objectFit: "contain",
