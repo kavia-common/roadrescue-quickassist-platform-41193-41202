@@ -55,14 +55,19 @@ export function RequestDetailPage() {
     return all.find((r) => String(r.id) === String(requestId)) || null;
   }, [requestId]);
 
-  const lat = parseFiniteNumber(req?.lat ?? req?.latitude ?? req?.location?.lat);
-  const lon = parseFiniteNumber(req?.lon ?? req?.longitude ?? req?.location?.lon);
+  // In this MVP, SubmitRequestPage persists:
+  // - location: string (address)
+  // - contactPhone
+  // - vehicle: { make, model }
+  // So RequestDetailPage must NOT assume location is an object.
+  const lat = parseFiniteNumber(req?.lat ?? req?.latitude);
+  const lon = parseFiniteNumber(req?.lon ?? req?.longitude);
 
   const address =
     String(
       req?.breakdownAddress ??
         req?.address ??
-        req?.location ??
+        req?.location ?? // persisted by SubmitRequestPage
         req?.breakdown_location ??
         req?.breakdownLocation ??
         ""

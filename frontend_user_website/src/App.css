@@ -783,6 +783,14 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   font-size: 13px;
 }
 
+/* Request Details: ensure Leaflet map is always visible (explicit min height + no collapse) */
+.rrq-detailBlock--full .map-card{
+  width: 100%;
+}
+.rrq-detailBlock--full .map-frame{
+  min-height: 320px; /* visible height even if MapContainer style fails */
+}
+
 @media (max-width: 720px){
   .rrq-detailGrid{ grid-template-columns: 1fr; }
 }
