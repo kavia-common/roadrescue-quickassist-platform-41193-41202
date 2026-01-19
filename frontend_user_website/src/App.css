@@ -684,6 +684,111 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   color: #065F46;
 }
 
+/* My Requests: clickable Request ID */
+.rrq-requestIdLink{
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-weight: 900;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rrq-requestIdLink:hover{
+  text-decoration-thickness: 2px;
+}
+
+/* Request Details (modal content) */
+.rrq-rd{
+  display: grid;
+  gap: 12px;
+}
+.rrq-rd__metaRow{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(229,231,235,0.9);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.8);
+}
+.rrq-rd__id{
+  font-weight: 1000;
+  font-size: 13px;
+}
+.rrq-rd__created{
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.rrq-rd__grid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.rrq-rd__block{
+  border: 1px solid rgba(229,231,235,0.9);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.85);
+  padding: 12px;
+  min-width: 0;
+}
+.rrq-rd__block--full{
+  grid-column: 1 / -1;
+}
+.rrq-rd__blockTitle{
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.rrq-rd__kv{
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+}
+.rrq-rd__kv > div{
+  display:flex;
+  justify-content:space-between;
+  gap: 14px;
+}
+.rrq-rd__k{
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 13px;
+}
+.rrq-rd__v{
+  font-weight: 800;
+  font-size: 13px;
+  text-align: right;
+}
+.rrq-rd__text{
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.rrq-rd__mapWrap{
+  margin-top: 4px;
+}
+.rrq-rd__locationNote{
+  border: 1px dashed rgba(37,99,235,0.25);
+  background: rgba(37,99,235,0.06);
+  border-radius: 14px;
+  padding: 12px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+@media (max-width: 720px){
+  .rrq-rd__grid{ grid-template-columns: 1fr; }
+}
+
 .empty{
   border: 1px dashed rgba(37,99,235,0.28);
   background: rgba(37,99,235,0.06);
