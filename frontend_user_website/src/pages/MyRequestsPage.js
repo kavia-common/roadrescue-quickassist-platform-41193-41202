@@ -1,71 +1,106 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React from "react";
 import { Card } from "../components/ui/Card";
-import { Table } from "../components/ui/Table";
-import { dataService } from "../services/dataService";
-import { statusBadgeClass, statusLabel } from "../services/statusUtils";
+import { Badge } from "../components/ui/Badge";
+import { useUserRequests } from "../hooks/useUserRequests";
 
-function statusBadge(status) {
-  return <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>;
+function badgeKind(status) {
+  if (status === "Completed") return "success";
+  if (status === "Accepted") return "warning";
+  return "info";
 }
 
 // PUBLIC_INTERFACE
-export function MyRequestsPage({ user }) {
-  /** Lists requests for current user. */
-  const [rows, setRows] = useState([]);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const list = await dataService.listRequests({ forUserId: user.id });
-        if (mounted) setRows(list);
-      } catch (e) {
-        if (mounted) setError(e.message || "Could not load requests.");
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [user.id]);
+export function MyRequestsPage() {
+  /** Lists mock requests from localStorage. */
+  const { requests, setStatus, clearAll } = useUserRequests();
 
   return (
     <div className="container">
       <div className="hero">
-        <h1 className="h1">My requests</h1>
-        <p className="lead">Track status updates as mechanics accept and work your case.</p>
+        <h1 className="h1">My Requests</h1>
+        <p className="lead">Your requests are stored locally for the MVP. Refresh-safe via localStorage.</p>
       </div>
 
       <Card
         title="Requests"
-        subtitle="Newest first."
+        subtitle={requests.length ? "Newest first." : "No requests yet."}
         actions={
-          <Link className="link" to="/submit">
-            + New request
-          </Link>
+          requests.length ? (
+            <button type="button" className="link" onClick={clearAll} style={{ background: "transparent", border: 0, cursor: "pointer" }}>
+              Clear all
+            </button>
+          ) : null
         }
       >
-        {error ? <div className="alert alert-error">{error}</div> : null}
-        <Table
-          columns={[
-            { key: "id", header: "Request", render: (r) => <Link className="link" to={`/requests/${r.id}`}>{r.id.slice(0, 8)}</Link> },
-            { key: "createdAt", header: "Created", render: (r) => new Date(r.createdAt).toLocaleString() },
-            { 
-              key: "vehicle", 
-              header: "Vehicle", 
-              // Display vehicle as "<make> <model>", fallback to "" if undefined (ENFORCED SHAPE)
-              render: (r) => {
-                const v = r.vehicle && typeof r.vehicle === "object" ? r.vehicle : {};
-                return `${v.make || ""} ${v.model || ""}`.trim();
-              },
-            },
-            { key: "status", header: "Status", render: (r) => statusBadge(r.status) },
-          ]}
-          rows={rows}
-          rowKey={(r) => r.id}
-        />
+        {requests.length === 0 ? (
+          <div className="empty">
+            <div style={{ fontWeight: 900, marginBottom: 6 }}>No requests yet</div>
+            <div className="footer-muted" style={{ marginBottom: 12 }}>
+              Submit your first breakdown request to see it here.
+            </div>
+          </div>
+        ) : (
+          <div className="requests-grid">
+            {requests.map((r) => (
+              <div key={r.id} className="card request-card">
+                <div className="card-header">
+                  <div>
+                    <h2 className="card-title">{r.vehicle.make} {r.vehicle.model}</h2>
+                    <p className="card-subtitle">
+                      <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>{r.id}</span> •{" "}
+                      {new Date(r.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="card-actions">
+                    <Badge kind={badgeKind(r.status)} title="Current status">
+                      {r.status}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="card-body">
+                  <div className="kv">
+                    <div>
+                      <span className="k">Problem</span>
+                      <span className="v" style={{ fontWeight: 600 }}>{r.problemDescription}</span>
+                    </div>
+                    <div>
+                      <span className="k">Location</span>
+                      <span className="v" style={{ fontWeight: 600 }}>{r.location}</span>
+                    </div>
+                    <div>
+                      <span className="k">Phone</span>
+                      <span className="v">{r.contactPhone}</span>
+                    </div>
+                  </div>
+
+                  <div className="divider" />
+
+                  <div className="row">
+                    <ButtonSet onSetStatus={(s) => setStatus(r.id, s)} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
+  );
+}
+
+function ButtonSet({ onSetStatus }) {
+  return (
+    <>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => onSetStatus("Pending")}>
+        Pending
+      </button>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => onSetStatus("Accepted")}>
+        Accepted
+      </button>
+      <button type="button" className="btn btn-primary btn-sm" onClick={() => onSetStatus("Completed")}>
+        Completed
+      </button>
+    </>
   );
 }

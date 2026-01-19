@@ -3,46 +3,37 @@ import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
-import { dataService } from "../services/dataService";
+import { useAuth } from "../context/AuthContext";
 
 // PUBLIC_INTERFACE
-export function RegisterPage({ onAuthed }) {
-  /** Registration page for users. */
+export function RegisterPage() {
+  /** Registration page (mock). */
   const navigate = useNavigate();
+  const { register } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
+  const [status, setStatus] = useState({ type: "", message: "" });
   const [busy, setBusy] = useState(false);
-  const [oauthBusy, setOauthBusy] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
-    setError("");
-    if (!email.trim()) return setError("Email is required.");
-    if (password.length < 6) return setError("Password must be at least 6 characters.");
-    if (password !== confirm) return setError("Passwords do not match.");
+    setStatus({ type: "", message: "" });
+
+    if (!email.trim()) return setStatus({ type: "error", message: "Email is required." });
+    if (password.length < 6) return setStatus({ type: "error", message: "Password must be at least 6 characters (mock validation)." });
+    if (password !== confirm) return setStatus({ type: "error", message: "Passwords do not match." });
+
     setBusy(true);
     try {
-      const u = await dataService.register(email.trim(), password);
-      onAuthed?.(u);
-      navigate("/submit");
+      await register(email.trim(), password);
+      setStatus({ type: "success", message: "Account created. Redirecting…" });
+      navigate("/submit", { replace: true });
     } catch (err) {
-      setError(err.message || "Registration failed.");
+      setStatus({ type: "error", message: err?.message || "Registration failed." });
     } finally {
       setBusy(false);
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    setError("");
-    setOauthBusy(true);
-    try {
-      await dataService.loginWithGoogle({ redirectTo: window.location.origin });
-      // Typically redirects away; if it doesn't, the auth listener will update the app shell.
-    } catch (err) {
-      setError(err.message || "Google sign-in failed.");
-      setOauthBusy(false);
     }
   };
 
@@ -55,22 +46,21 @@ export function RegisterPage({ onAuthed }) {
 
       <Card
         title="Register"
-        subtitle="Create a real account with Supabase auth."
+        subtitle="Mock register for MVP (Supabase-ready structure)."
         actions={
           <Link className="link" to="/login">
             Back to login
           </Link>
         }
       >
-        <div className="form" style={{ marginBottom: 12 }}>
-          <Button variant="ghost" disabled={oauthBusy || busy} onClick={signInWithGoogle} style={{ width: "100%" }}>
-            {oauthBusy ? "Redirecting to Google…" : "Continue with Google"}
-          </Button>
-          <div className="divider" style={{ margin: "6px 0 0" }} />
-        </div>
+        {status.message ? (
+          <div className={`alert ${status.type === "success" ? "alert-success" : status.type === "error" ? "alert-error" : "alert-info"}`} style={{ marginBottom: 12 }}>
+            {status.message}
+          </div>
+        ) : null}
 
         <form onSubmit={submit} className="form">
-          <Input label="Email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={oauthBusy} />
+          <Input label="Email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={busy} />
           <Input
             label="Password"
             name="password"
@@ -78,8 +68,8 @@ export function RegisterPage({ onAuthed }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            hint="At least 6 characters."
-            disabled={oauthBusy}
+            hint="MVP mock: any 6+ characters."
+            disabled={busy}
           />
           <Input
             label="Confirm password"
@@ -88,15 +78,19 @@ export function RegisterPage({ onAuthed }) {
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             required
-            disabled={oauthBusy}
+            disabled={busy}
           />
-          {error ? <div className="alert alert-error">{error}</div> : null}
+
           <div className="row">
-            <Button type="submit" disabled={busy || oauthBusy}>
-              {busy ? "Creating..." : "Create account"}
+            <Button type="submit" disabled={busy}>
+              {busy ? "Creating…" : "Create account"}
             </Button>
           </div>
         </form>
+
+        <div className="note">
+          Supabase hook point: replace <code>register()</code> in <code>AuthContext</code> with <code>supabase.auth.signUp</code>.
+        </div>
       </Card>
     </div>
   );
