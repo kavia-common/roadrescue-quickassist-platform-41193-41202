@@ -2,169 +2,268 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { Container } from "../components/ui/Container";
 import { useAuth } from "../context/AuthContext";
+
+function StatPill({ icon, label }) {
+  return (
+    <div className="mk-pill" role="listitem">
+      <span className="mk-pill__icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="mk-pill__label">{label}</span>
+    </div>
+  );
+}
+
+function StepCard({ icon, title, text }) {
+  return (
+    <div className="mk-stepCard" role="listitem">
+      <div className="mk-stepCard__icon" aria-hidden="true">
+        {icon}
+      </div>
+      <div className="mk-stepCard__title">{title}</div>
+      <div className="mk-stepCard__text">{text}</div>
+    </div>
+  );
+}
 
 // PUBLIC_INTERFACE
 export function HomePage() {
-  /** Public long-form landing page with professional sections and CTA (UI-only). */
+  /** Public long-form landing page for RoadRescue QuickAssist (UI-only). */
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
-  const onGetHelp = () => {
+  const onGetHelpNow = () => {
     navigate(isAuthenticated ? "/submit" : "/login");
   };
 
   return (
-    <div className="home">
+    <div className="mk-page">
       {/* HERO */}
-      <section className="home-hero" aria-label="Hero">
-        <div className="container">
-          <div className="home-hero__inner">
-            <p className="home-eyebrow">RoadRescue QuickAssist</p>
+      <section className="mk-hero" aria-label="RoadRescue QuickAssist hero">
+        <Container>
+          <div className="mk-hero__inner">
+            <p className="mk-eyebrow">RoadRescue QuickAssist • Roadside Assistance MVP</p>
 
-            <h1 className="home-title">Roadside Assistance at Your Fingertips</h1>
-            <p className="home-subtitle">
-              Simplified so you can request help quickly, track status updates in minutes, and stay informed.
+            <h1 className="mk-title">
+              Get roadside help fast—submit a breakdown request in under a minute.
+            </h1>
+
+            <p className="mk-subtitle">
+              QuickAssist is a streamlined, mobile-friendly experience for drivers: request help, see clear status updates,
+              and stay informed until you’re safely back on the road.
             </p>
 
-            <div className="home-hero__actions">
-              <Button onClick={onGetHelp} size="lg" style={{ minWidth: 180 }}>
-                Get Started
+            <div className="mk-hero__actions" aria-label="Primary actions">
+              <Button onClick={onGetHelpNow} size="lg" style={{ minWidth: 180 }}>
+                Get Help Now
               </Button>
               <Button variant="secondary-outline" size="lg" onClick={() => navigate("/how-it-works")}>
-                Learn More
+                Learn How It Works
               </Button>
             </div>
 
-            <div className="home-trust">
-              <span className="home-trust__dot" aria-hidden="true" />
-              <span>Clean, mobile-friendly experience • UI-only MVP</span>
+            <div className="mk-socialProof" aria-label="Social proof highlights" role="list">
+              <StatPill icon="⭐" label="4.8 average driver satisfaction (pilot)" />
+              <StatPill icon="⏱️" label="Quick intake: clear form, fewer steps" />
+              <StatPill icon="🔒" label="Secure sign-in ready (Supabase auth)" />
+              <StatPill icon="💬" label="SMS updates capable (Twilio integration)" />
             </div>
           </div>
-        </div>
+        </Container>
       </section>
 
-      {/* WHY CHOOSE */}
-      <section className="home-section" aria-label="Why choose RoadRescue">
-        <div className="container">
-          <div className="home-section__head">
-            <h2 className="home-h2">Why Choose RoadRescue?</h2>
+      {/* VALUE GRID */}
+      <section className="mk-section" aria-label="Features and value">
+        <Container>
+          <div className="mk-section__head">
+            <h2 className="mk-h2">A calm, professional experience—when you need it most</h2>
+            <p className="mk-lead">
+              Roadside breakdowns are stressful. QuickAssist keeps the experience simple: tell us what happened, how to
+              reach you, and where you are—then track progress in a clean dashboard.
+            </p>
           </div>
 
-          <div className="home-grid3">
+          <div className="mk-grid3">
             <Card
-              title="Quick Response"
-              subtitle="Submit a request in seconds with a simple form and clear fields."
-              className="home-featureCard"
+              title="Simple Request Flow"
+              subtitle="Vehicle + issue + contact details, captured cleanly."
+              className="mk-card"
             >
               <p className="p">
-                Designed for speed: enter your vehicle and issue details, then track updates without confusion.
+                Designed to reduce confusion on mobile—large tap targets, clear labels, and straightforward fields that
+                help mechanics prepare before they arrive.
               </p>
+              <ul className="mk-list">
+                <li>Fast intake UX</li>
+                <li>Readable typography and spacing</li>
+                <li>Accessible interactions (focus states, headings)</li>
+              </ul>
             </Card>
 
-            <Card
-              title="Verified Mechanics"
-              subtitle="Reliable support experience with a vetted network (product-ready)."
-              className="home-featureCard"
-            >
+            <Card title="Transparent Status" subtitle="At-a-glance updates across the lifecycle." className="mk-card">
               <p className="p">
-                Built with a structure that supports mechanic approvals and professional workflows as the platform grows.
+                See progress without calling a hotline repeatedly. Status badges and request history keep you informed at
+                every step.
               </p>
+              <ul className="mk-list">
+                <li>Open → Assigned → En Route → Working → Completed (future-ready)</li>
+                <li>Request history view</li>
+                <li>Detail view friendly on mobile</li>
+              </ul>
             </Card>
 
-            <Card
-              title="Real-Time Tracking"
-              subtitle="Stay informed with clean status updates across the request lifecycle."
-              className="home-featureCard"
-            >
+            <Card title="Built for MVP → Product" subtitle="Structured to expand safely." className="mk-card">
               <p className="p">
-                A simple dashboard view keeps you updated at-a-glance from open to completion (simulated in MVP).
+                QuickAssist is a focused MVP, but it’s designed to scale: Supabase authentication and data storage, plus
+                Twilio SMS capability for notifications.
               </p>
+              <ul className="mk-list">
+                <li>Supabase auth & persistence</li>
+                <li>Twilio SMS updates (capability)</li>
+                <li>Clean component patterns</li>
+              </ul>
             </Card>
           </div>
-        </div>
+        </Container>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section className="home-section home-section--tight" aria-label="How it works">
-        <div className="container">
-          <div className="home-section__head">
-            <h2 className="home-h2">How It Works</h2>
+      {/* BENEFITS */}
+      <section className="mk-section mk-section--subtle" aria-label="Benefits">
+        <Container>
+          <div className="mk-section__head">
+            <h2 className="mk-h2">Benefits for drivers</h2>
+            <p className="mk-lead">
+              QuickAssist focuses on the essentials: clarity, speed, and trust—without unnecessary complexity.
+            </p>
           </div>
 
-          <div className="home-steps" role="list" aria-label="How it works steps">
-            <div className="home-step" role="listitem">
-              <div className="home-step__icon" aria-hidden="true">
-                📝
-              </div>
-              <div className="home-step__title">Submit Request</div>
-              <div className="home-step__desc">Provide vehicle info, issue details, and your location.</div>
-            </div>
+          <div className="mk-grid2">
+            <Card title="Less waiting, more clarity" subtitle="Know what’s happening next." className="mk-card">
+              <ul className="mk-list">
+                <li>Clear confirmation after submitting a request</li>
+                <li>Professional UI for tracking status updates</li>
+                <li>Simple request detail view for reference</li>
+              </ul>
+            </Card>
 
-            <div className="home-step" role="listitem">
-              <div className="home-step__icon" aria-hidden="true">
-                🔎
-              </div>
-              <div className="home-step__title">Review Details</div>
-              <div className="home-step__desc">We validate details for a smooth service handoff.</div>
-            </div>
-
-            <div className="home-step" role="listitem">
-              <div className="home-step__icon" aria-hidden="true">
-                🛠️
-              </div>
-              <div className="home-step__title">Get Assistance</div>
-              <div className="home-step__desc">A mechanic is assigned and reaches out with next steps.</div>
-            </div>
-
-            <div className="home-step" role="listitem">
-              <div className="home-step__icon" aria-hidden="true">
-                ✅
-              </div>
-              <div className="home-step__title">Track Progress</div>
-              <div className="home-step__desc">Watch status updates from open → completed.</div>
-            </div>
+            <Card title="Trust by design" subtitle="Built with security and privacy in mind." className="mk-card">
+              <ul className="mk-list">
+                <li>Secure authentication architecture (Supabase)</li>
+                <li>Data stored with clear separation of user requests</li>
+                <li>Privacy-respecting MVP approach (no real-time tracking)</li>
+              </ul>
+            </Card>
           </div>
-        </div>
+        </Container>
+      </section>
+
+      {/* HOW IT WORKS PREVIEW */}
+      <section className="mk-section" aria-label="How it works preview">
+        <Container>
+          <div className="mk-section__head">
+            <h2 className="mk-h2">How it works (preview)</h2>
+            <p className="mk-lead">
+              A streamlined four-step flow: request help, get matched, receive updates, and get back on the road.
+            </p>
+          </div>
+
+          <div className="mk-steps" role="list" aria-label="How it works steps preview">
+            <StepCard
+              icon="📝"
+              title="Request"
+              text="Tell us your vehicle, what happened, and how to reach you."
+            />
+            <StepCard
+              icon="🤝"
+              title="Match"
+              text="We connect your request to an available mechanic (MVP-ready flow)."
+            />
+            <StepCard
+              icon="📣"
+              title="Notify"
+              text="Receive status updates as your job moves forward (SMS capable)."
+            />
+            <StepCard
+              icon="🛠️"
+              title="Assist"
+              text="A mechanic helps you safely resolve the issue—then you’re back moving."
+            />
+          </div>
+
+          <div className="mk-inlineCtas" aria-label="How it works actions">
+            <Button variant="secondary-outline" size="md" onClick={() => navigate("/how-it-works")}>
+              See the full process →
+            </Button>
+          </div>
+        </Container>
+      </section>
+
+      {/* TESTIMONIALS TEASER */}
+      <section className="mk-section mk-section--subtle" aria-label="Testimonials">
+        <Container>
+          <div className="mk-section__head">
+            <h2 className="mk-h2">What drivers say</h2>
+            <p className="mk-lead">UI-only placeholders to illustrate a professional marketing experience.</p>
+          </div>
+
+          <div className="mk-grid3">
+            <Card title="“Finally, a clean flow.”" subtitle="Priya • Flat tire" className="mk-card">
+              <p className="p">
+                “Submitting the request was quick, and the status updates were easy to understand. No back-and-forth.”
+              </p>
+            </Card>
+            <Card title="“Fewer steps when stressed.”" subtitle="Jordan • Battery issue" className="mk-card">
+              <p className="p">
+                “The form didn’t feel overwhelming on my phone. I got the basics in and could track progress.”
+              </p>
+            </Card>
+            <Card title="“Clear and professional.”" subtitle="Sam • Engine warning light" className="mk-card">
+              <p className="p">
+                “Everything looked organized—exactly what I want when I’m stuck and trying to get help quickly.”
+              </p>
+            </Card>
+          </div>
+        </Container>
       </section>
 
       {/* CTA BAND */}
-      <section className="home-ctaBand" aria-label="Call to action">
-        <div className="container">
-          <div className="home-ctaBand__inner">
+      <section className="mk-ctaBand" aria-label="Call to action">
+        <Container>
+          <div className="mk-ctaBand__inner">
             <div>
-              <h3 className="home-h3">Ready to Get Started?</h3>
-              <p className="home-ctaBand__subtitle">
-                Get immediate help on the road by submitting your request now and tracking updates with ease.
+              <h2 className="mk-ctaBand__title">Need help right now?</h2>
+              <p className="mk-ctaBand__subtitle">
+                Submit a request and track progress with a clean, driver-first experience. No real-time tracking—just the
+                essentials that move you forward.
               </p>
+              <div className="mk-ctaBand__note">
+                {isAuthenticated ? (
+                  <span>
+                    You’re signed in—go straight to <strong>Submit Request</strong>.
+                  </span>
+                ) : (
+                  <span>
+                    Not signed in yet? We’ll take you to <strong>Login</strong> first.
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="home-ctaBand__actions">
-              <Button onClick={onGetHelp} size="lg" style={{ minWidth: 180 }}>
-                Get Started
+
+            <div className="mk-ctaBand__actions" aria-label="CTA actions">
+              <Button onClick={onGetHelpNow} size="lg" style={{ minWidth: 180 }}>
+                Get Help Now
+              </Button>
+              <Button variant="secondary-solid" size="lg" onClick={() => navigate("/how-it-works")}>
+                Learn How It Works
               </Button>
             </div>
           </div>
-
-          <div className="home-ctaBand__note">
-            {isAuthenticated ? (
-              <span>
-                You’re signed in — go straight to <strong>Submit Request</strong>.
-              </span>
-            ) : (
-              <span>
-                Not signed in yet? We’ll take you to <strong>Login</strong> first.
-              </span>
-            )}
-          </div>
-        </div>
+        </Container>
       </section>
 
-      {/* BOTTOM SPACING SECTION (matches long-form feel) */}
-      <section className="home-section home-section--footerGap" aria-hidden="true">
-        <div className="container">
-          <div className="home-divider" />
-        </div>
-      </section>
+      <div className="mk-bottomSpacer" aria-hidden="true" />
     </div>
   );
 }
