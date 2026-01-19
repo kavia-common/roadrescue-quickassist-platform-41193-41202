@@ -114,7 +114,9 @@ export function SubmitRequestPage() {
       return;
     }
 
-    // Persist ONLY the existing schema (do not change localStorage payload shape/policies).
+    // Persist request payload for user read-only views.
+    // We include lat/lon/address so Request Details can show the map, but we do not
+    // introduce any status-changing behavior (user site is read-only for status).
     addRequest({
       vehicle: {
         make: vehicleMake,
@@ -123,6 +125,14 @@ export function SubmitRequestPage() {
       problemDescription: issueDescription,
       location: breakdownAddress,
       contactPhone,
+
+      // Additional fields used by RequestDetailPage (display-only).
+      breakdownAddress,
+      lat: Number.isFinite(Number(lat)) ? Number(lat) : null,
+      lon: Number.isFinite(Number(lon)) ? Number(lon) : null,
+
+      // Optional richer contact fields for detail display
+      contactName,
     });
 
     setStatus({

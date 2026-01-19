@@ -62,13 +62,11 @@ export function useUserRequests() {
     return next;
   }, []);
 
-  const setStatus = useCallback((id, status) => {
-    const normalized = normalizeStatus(status);
-    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: normalized } : r)));
-  }, []);
-
+  // IMPORTANT (User Website Read-Only):
+  // Users must not be able to change request statuses from this website.
+  // Mechanic/Admin portals own the workflow transitions.
   const clearAll = useCallback(() => setRequests([]), []);
 
-  const api = useMemo(() => ({ requests, addRequest, setStatus, clearAll }), [requests, addRequest, setStatus, clearAll]);
+  const api = useMemo(() => ({ requests, addRequest, clearAll }), [requests, addRequest, clearAll]);
   return api;
 }
