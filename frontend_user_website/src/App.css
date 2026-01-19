@@ -283,6 +283,14 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   backdrop-filter: blur(10px);
   background: rgba(249,250,251,0.75);
   border-bottom: 1px solid rgba(229,231,235,0.85);
+  transition: box-shadow 180ms ease, background 180ms ease, border-color 180ms ease;
+}
+
+/* Soft shadow once the user scrolls a bit */
+.navbar--scrolled{
+  box-shadow: 0 10px 30px rgba(17,24,39,0.10);
+  background: rgba(249,250,251,0.88);
+  border-bottom-color: rgba(229,231,235,0.95);
 }
 .navbar-inner{
   width: min(1100px, calc(100% - 32px));
@@ -975,6 +983,39 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
 .mk-teamMember__blurb{color: var(--text); line-height: 1.55; font-size: 13px; margin-top: 8px}
 
 .mk-bottomSpacer{padding-top: clamp(18px, 3.0vw, 28px)}
+
+/* --- Subtle scroll reveal animations (marketing pages) --- */
+/*
+  Pattern:
+  - Add `data-reveal` attribute to elements you want animated.
+  - JS sets `data-reveal="in"` when visible.
+  - Optional: set `data-reveal-variant="up|down|left|right"` for slight direction.
+*/
+[data-reveal]{
+  opacity: 0;
+  transform: translate3d(0, 12px, 0);
+  transition: opacity 520ms ease, transform 520ms ease;
+  will-change: opacity, transform;
+}
+
+[data-reveal][data-reveal-variant="left"]{ transform: translate3d(-12px, 0, 0); }
+[data-reveal][data-reveal-variant="right"]{ transform: translate3d(12px, 0, 0); }
+[data-reveal][data-reveal-variant="down"]{ transform: translate3d(0, -12px, 0); }
+
+/* When revealed */
+[data-reveal="in"]{
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Reduced motion: no animation, just show */
+@media (prefers-reduced-motion: reduce){
+  [data-reveal]{
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}
 
 /* Responsive */
 @media (max-width: 960px){

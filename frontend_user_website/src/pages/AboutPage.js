@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useScrollReveal } from "../hooks/useScrollReveal";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -25,6 +26,8 @@ export function AboutPage() {
   /** Long-form “About” marketing page for RoadRescue QuickAssist (UI-only). */
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+
+  useScrollReveal();
 
   const onPrimary = () => {
     navigate(isAuthenticated ? "/submit" : "/login");
@@ -57,7 +60,7 @@ export function AboutPage() {
   return (
     <div className="mk-page">
       {/* HERO */}
-      <section className="mk-hero mk-hero--compact" aria-label="About hero">
+      <section className="mk-hero mk-hero--compact" aria-label="About hero" data-reveal data-reveal-variant="up">
         <Container>
           <div className="mk-hero__inner">
             <p className="mk-eyebrow">About RoadRescue QuickAssist</p>
@@ -80,7 +83,7 @@ export function AboutPage() {
       </section>
 
       {/* OUR MISSION */}
-      <section className="mk-section" aria-label="Our mission">
+      <section className="mk-section" aria-label="Our mission" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">Our Mission</h2>
@@ -119,7 +122,7 @@ export function AboutPage() {
       </section>
 
       {/* HOW WE OPERATE */}
-      <section className="mk-section mk-section--subtle" aria-label="How we operate">
+      <section className="mk-section mk-section--subtle" aria-label="How we operate" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">How We Operate</h2>
@@ -153,7 +156,7 @@ export function AboutPage() {
       </section>
 
       {/* TECHNOLOGY */}
-      <section className="mk-section" aria-label="Technology">
+      <section className="mk-section" aria-label="Technology" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">Technology</h2>
@@ -183,7 +186,7 @@ export function AboutPage() {
       </section>
 
       {/* SAFETY & TRUST */}
-      <section className="mk-section mk-section--subtle" aria-label="Safety and trust">
+      <section className="mk-section mk-section--subtle" aria-label="Safety and trust" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">Safety & Trust</h2>
@@ -216,7 +219,7 @@ export function AboutPage() {
       </section>
 
       {/* CONTACT */}
-      <section className="mk-section" aria-label="Contact">
+      <section className="mk-section" aria-label="Contact" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">Contact</h2>
@@ -336,7 +339,7 @@ export function AboutPage() {
       </section>
 
       {/* TEAM */}
-      <section className="mk-section mk-section--subtle" aria-label="Team">
+      <section className="mk-section mk-section--subtle" aria-label="Team" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">Small team, strong focus</h2>
@@ -359,7 +362,7 @@ export function AboutPage() {
       </section>
 
       {/* CTA BAND */}
-      <section className="mk-ctaBand" aria-label="Call to action">
+      <section className="mk-ctaBand" aria-label="Call to action" data-reveal data-reveal-variant="up">
         <Container>
           <div className="mk-ctaBand__inner">
             <div>

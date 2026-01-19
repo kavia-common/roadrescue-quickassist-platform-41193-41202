@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { useAuth } from "../../context/AuthContext";
@@ -13,6 +13,25 @@ export function Navbar() {
   const navigate = useNavigate();
   const { isAuthenticated, role, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    // UI-only: adds a soft shadow once the user scrolls down a bit.
+    // Keep it lightweight and avoid frequent React state updates by only toggling on threshold changes.
+    const threshold = 8;
+    let last = null;
+
+    const onScroll = () => {
+      const next = window.scrollY > threshold;
+      if (last === next) return;
+      last = next;
+      setScrolled(next);
+    };
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const publicLinks = useMemo(
     () => [
@@ -45,7 +64,7 @@ export function Navbar() {
   };
 
   return (
-    <header className="navbar">
+    <header className={scrolled ? "navbar navbar--scrolled" : "navbar"}>
       <div className="navbar-inner">
         <Link
           to="/"

@@ -1,4 +1,5 @@
 import React from "react";
+import { useScrollReveal } from "../hooks/useScrollReveal";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -34,6 +35,8 @@ export function HomePage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
+  useScrollReveal();
+
   const onGetHelpNow = () => {
     navigate(isAuthenticated ? "/submit" : "/login");
   };
@@ -41,7 +44,7 @@ export function HomePage() {
   return (
     <div className="mk-page">
       {/* HERO */}
-      <section className="mk-hero" aria-label="RoadRescue QuickAssist hero">
+      <section className="mk-hero" aria-label="RoadRescue QuickAssist hero" data-reveal data-reveal-variant="up">
         <Container>
           <div className="mk-hero__inner">
             <p className="mk-eyebrow">RoadRescue QuickAssist • Roadside Assistance MVP</p>
@@ -75,7 +78,7 @@ export function HomePage() {
       </section>
 
       {/* VALUE GRID */}
-      <section className="mk-section" aria-label="Features and value">
+      <section className="mk-section" aria-label="Features and value" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">A calm, professional experience—when you need it most</h2>
@@ -130,7 +133,7 @@ export function HomePage() {
       </section>
 
       {/* BENEFITS */}
-      <section className="mk-section mk-section--subtle" aria-label="Benefits">
+      <section className="mk-section mk-section--subtle" aria-label="Benefits" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">Benefits for drivers</h2>
@@ -160,7 +163,7 @@ export function HomePage() {
       </section>
 
       {/* HOW IT WORKS PREVIEW */}
-      <section className="mk-section" aria-label="How it works preview">
+      <section className="mk-section" aria-label="How it works preview" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">How it works (preview)</h2>
@@ -201,7 +204,7 @@ export function HomePage() {
       </section>
 
       {/* TESTIMONIALS TEASER */}
-      <section className="mk-section mk-section--subtle" aria-label="Testimonials">
+      <section className="mk-section mk-section--subtle" aria-label="Testimonials" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">What drivers say</h2>
@@ -229,7 +232,7 @@ export function HomePage() {
       </section>
 
       {/* CTA BAND */}
-      <section className="mk-ctaBand" aria-label="Call to action">
+      <section className="mk-ctaBand" aria-label="Call to action" data-reveal data-reveal-variant="up">
         <Container>
           <div className="mk-ctaBand__inner">
             <div>

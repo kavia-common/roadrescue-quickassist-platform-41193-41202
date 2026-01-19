@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useScrollReveal } from "../hooks/useScrollReveal";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -51,6 +52,8 @@ export function HowItWorksPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
+  useScrollReveal();
+
   const onPrimary = () => {
     navigate(isAuthenticated ? "/submit" : "/login");
   };
@@ -91,7 +94,7 @@ export function HowItWorksPage() {
   return (
     <div className="mk-page">
       {/* HERO */}
-      <section className="mk-hero mk-hero--compact" aria-label="How it works hero">
+      <section className="mk-hero mk-hero--compact" aria-label="How it works hero" data-reveal data-reveal-variant="up">
         <Container>
           <div className="mk-hero__inner">
             <p className="mk-eyebrow">How It Works</p>
@@ -114,7 +117,7 @@ export function HowItWorksPage() {
       </section>
 
       {/* FLOW */}
-      <section className="mk-section" aria-label="Detailed process">
+      <section className="mk-section" aria-label="Detailed process" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">The QuickAssist flow</h2>
@@ -186,7 +189,7 @@ export function HowItWorksPage() {
       </section>
 
       {/* FAQ */}
-      <section className="mk-section mk-section--subtle" aria-label="FAQ">
+      <section className="mk-section mk-section--subtle" aria-label="FAQ" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">FAQ</h2>
@@ -209,7 +212,7 @@ export function HowItWorksPage() {
       </section>
 
       {/* CTA BAND */}
-      <section className="mk-ctaBand" aria-label="Get help call to action">
+      <section className="mk-ctaBand" aria-label="Get help call to action" data-reveal data-reveal-variant="up">
         <Container>
           <div className="mk-ctaBand__inner">
             <div>

@@ -1,4 +1,5 @@
 import React from "react";
+import { useScrollReveal } from "../hooks/useScrollReveal";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -34,6 +35,8 @@ export function WhyChooseUsPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
+  useScrollReveal();
+
   const onPrimary = () => {
     navigate(isAuthenticated ? "/submit" : "/login");
   };
@@ -41,7 +44,7 @@ export function WhyChooseUsPage() {
   return (
     <div className="mk-page">
       {/* HERO */}
-      <section className="mk-hero mk-hero--compact" aria-label="Why choose us hero">
+      <section className="mk-hero mk-hero--compact" aria-label="Why choose us hero" data-reveal data-reveal-variant="up">
         <Container>
           <div className="mk-hero__inner">
             <p className="mk-eyebrow">Why Choose RoadRescue QuickAssist</p>
@@ -64,7 +67,7 @@ export function WhyChooseUsPage() {
       </section>
 
       {/* REASONS GRID */}
-      <section className="mk-section" aria-label="Reasons grid">
+      <section className="mk-section" aria-label="Reasons grid" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">What makes QuickAssist different</h2>
@@ -120,7 +123,7 @@ export function WhyChooseUsPage() {
       </section>
 
       {/* COMPARISON */}
-      <section className="mk-section mk-section--subtle" aria-label="Comparison">
+      <section className="mk-section mk-section--subtle" aria-label="Comparison" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">QuickAssist vs. typical call centers</h2>
@@ -157,7 +160,7 @@ export function WhyChooseUsPage() {
       </section>
 
       {/* TRUST INDICATORS */}
-      <section className="mk-section" aria-label="Trust indicators">
+      <section className="mk-section" aria-label="Trust indicators" data-reveal>
         <Container>
           <div className="mk-section__head">
             <h2 className="mk-h2">Trust indicators</h2>
@@ -204,7 +207,7 @@ export function WhyChooseUsPage() {
       </section>
 
       {/* CTA BAND */}
-      <section className="mk-ctaBand" aria-label="Call to action">
+      <section className="mk-ctaBand" aria-label="Call to action" data-reveal data-reveal-variant="up">
         <Container>
           <div className="mk-ctaBand__inner">
             <div>
