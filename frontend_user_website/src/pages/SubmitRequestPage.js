@@ -62,10 +62,14 @@ export function SubmitRequestPage() {
 
   return (
     <UserShell
-      title="Submit Request"
-      subtitle="Tell us what happened and where you are. This MVP stores requests locally in your browser."
+      title="Submit a breakdown request"
+      subtitle="Describe the issue and your location. This MVP stores requests locally in your browser."
     >
-      <Card title="Request details" subtitle="No backend call yet — stored locally in your browser.">
+      <Card
+        title="Request details"
+        subtitle="No backend call yet — stored locally in your browser."
+        className="rrq-auth-card"
+      >
         {status.message ? (
           <div
             className={`alert ${
@@ -77,95 +81,136 @@ export function SubmitRequestPage() {
           </div>
         ) : null}
 
-        <form onSubmit={onSubmit} className="form">
-          <div className="grid2">
-            <Input
-              label="Vehicle make"
-              name="make"
-              value={vehicle.make}
-              onChange={(e) => setVehicle((v) => ({ ...v, make: e.target.value }))}
-              required
-              error={errors.make}
-            />
-            <Input
-              label="Vehicle model"
-              name="model"
-              value={vehicle.model}
-              onChange={(e) => setVehicle((v) => ({ ...v, model: e.target.value }))}
-              required
-              error={errors.model}
-            />
+        <form onSubmit={onSubmit} className="rrq-form">
+          {/* Section: Vehicle */}
+          <div className="rrq-form__section">
+            <div className="rrq-form__sectionHead">
+              <div className="rrq-form__sectionTitle">Vehicle</div>
+            </div>
+
+            <div className="rrq-form__grid2">
+              <Input
+                label="Make"
+                name="make"
+                value={vehicle.make}
+                onChange={(e) => setVehicle((v) => ({ ...v, make: e.target.value }))}
+                required
+                error={errors.make}
+                placeholder="e.g., Toyota"
+              />
+              <Input
+                label="Model"
+                name="model"
+                value={vehicle.model}
+                onChange={(e) => setVehicle((v) => ({ ...v, model: e.target.value }))}
+                required
+                error={errors.model}
+                placeholder="e.g., Corolla"
+              />
+            </div>
           </div>
 
-          <div className="field">
-            <label className="label" htmlFor="problemDescription">
-              Problem description <span className="req">*</span>
-            </label>
-            <textarea
-              id="problemDescription"
-              className={`textarea ${errors.problemDescription ? "input-error" : ""}`}
-              value={problemDescription}
-              onChange={(e) => setProblemDescription(e.target.value)}
-              placeholder="Flat tire, battery issue, engine trouble, warning lights…"
-              rows={4}
-            />
-            {errors.problemDescription ? <div className="error">{errors.problemDescription}</div> : null}
+          {/* Section: Problem */}
+          <div className="rrq-form__section">
+            <div className="rrq-form__sectionHead">
+              <div className="rrq-form__sectionTitle">Problem description</div>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="problemDescription">
+                Description <span className="req">*</span>
+              </label>
+              <textarea
+                id="problemDescription"
+                className={`textarea ${errors.problemDescription ? "input-error" : ""}`}
+                value={problemDescription}
+                onChange={(e) => setProblemDescription(e.target.value)}
+                placeholder="Flat tire, battery issue, engine trouble, warning lights…"
+                rows={4}
+              />
+              {errors.problemDescription ? <div className="error">{errors.problemDescription}</div> : null}
+            </div>
           </div>
 
-          <div className="field">
-            <label className="label" htmlFor="location">
-              Location (MVP free text) <span className="req">*</span>
-            </label>
-            <textarea
-              id="location"
-              className={`textarea ${errors.location ? "input-error" : ""}`}
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Area, city, nearby landmark, or any helpful info."
-              rows={3}
-            />
-            {errors.location ? <div className="error">{errors.location}</div> : null}
-            <div className="hint">MVP: free text only (no maps/geocoding).</div>
+          {/* Section: Location */}
+          <div className="rrq-form__section">
+            <div className="rrq-form__sectionHead">
+              <div className="rrq-form__sectionTitle">Location (free text)</div>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="location">
+                Location <span className="req">*</span>
+              </label>
+              <textarea
+                id="location"
+                className={`textarea ${errors.location ? "input-error" : ""}`}
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Area, city, nearby landmark, or any helpful info."
+                rows={3}
+              />
+              {errors.location ? <div className="error">{errors.location}</div> : null}
+              <div className="hint">MVP: free text only (no maps/geocoding).</div>
+            </div>
           </div>
 
-          <Input
-            label="Contact phone"
-            name="contactPhone"
-            value={contactPhone}
-            onChange={(e) => setContactPhone(e.target.value)}
-            required
-            error={errors.contactPhone}
-            placeholder="e.g., +1 555-123-4567"
-          />
+          {/* Section: Contact */}
+          <div className="rrq-form__section">
+            <div className="rrq-form__sectionHead">
+              <div className="rrq-form__sectionTitle">Contact</div>
+            </div>
 
-          <div className="row">
-            <Button type="submit" size="lg">
-              Submit request
-            </Button>
-            <Button
-              variant="secondary-outline"
-              type="button"
-              size="lg"
-              onClick={() => {
-                navigate(-1);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="ghost"
-              type="button"
-              onClick={() => {
-                setVehicle({ make: "", model: "" });
-                setProblemDescription("");
-                setLocation("");
-                setContactPhone("");
-                setErrors({});
-                setStatus({ type: "info", message: "Form cleared." });
-              }}
-            >
-              Clear
-            </Button>
+            <div className="rrq-form__grid2">
+              <Input
+                label="Phone number"
+                name="contactPhone"
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                required
+                error={errors.contactPhone}
+                placeholder="e.g., +1 555-123-4567"
+              />
+
+              {/* Spacer to match the 2-column look from the reference */}
+              <div className="rrq-form__hintBox" aria-hidden="true">
+                <div className="rrq-form__hintBoxTitle">Tip</div>
+                <div className="rrq-form__hintBoxText">Include a number you can answer quickly so help can reach you.</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom action bar (matches reference positioning/feel) */}
+          <div className="rrq-form__actions">
+            <div className="rrq-form__actionsLeft">
+              <Button
+                variant="ghost"
+                type="button"
+                onClick={() => {
+                  setVehicle({ make: "", model: "" });
+                  setProblemDescription("");
+                  setLocation("");
+                  setContactPhone("");
+                  setErrors({});
+                  setStatus({ type: "info", message: "Form cleared." });
+                }}
+              >
+                Clear form
+              </Button>
+            </div>
+
+            <div className="rrq-form__actionsRight">
+              <Button
+                variant="secondary-outline"
+                type="button"
+                onClick={() => {
+                  navigate(-1);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Submit request</Button>
+            </div>
           </div>
         </form>
       </Card>

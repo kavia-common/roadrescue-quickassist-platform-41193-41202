@@ -1,7 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
-import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { useUserRequests } from "../hooks/useUserRequests";
 import { UserShell } from "../components/layout/UserShell";
@@ -12,87 +11,86 @@ function badgeKind(status) {
   return "info";
 }
 
+function statusPillClass(status) {
+  const k = badgeKind(status);
+  if (k === "success") return "rrq-pill rrq-pill--success";
+  if (k === "warning") return "rrq-pill rrq-pill--warning";
+  return "rrq-pill rrq-pill--info";
+}
+
 // PUBLIC_INTERFACE
 export function MyRequestsPage() {
   /** Lists mock requests from localStorage. */
   const navigate = useNavigate();
   const { requests, setStatus, clearAll } = useUserRequests();
 
+  const rows = useMemo(() => requests, [requests]);
+
   return (
-    <UserShell title="My Requests" subtitle="Your requests are stored locally for the MVP (refresh-safe via localStorage).">
+    <UserShell title="My requests" subtitle="All requests are stored locally for this MVP (refresh-safe via localStorage).">
       <Card
         title="Requests"
-        subtitle={requests.length ? "Newest first." : "No requests yet."}
+        subtitle={rows.length ? "Newest first." : "No requests yet."}
+        className="rrq-auth-card"
         actions={
-          requests.length ? (
+          rows.length ? (
             <button
               type="button"
-              className="link"
+              className="rrq-clearLink"
               onClick={clearAll}
               style={{ background: "transparent", border: 0, cursor: "pointer" }}
             >
-              Clear all
+              Clear request history
             </button>
           ) : null
         }
       >
-        {requests.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="empty">
             <div style={{ fontWeight: 900, marginBottom: 6 }}>No requests yet</div>
             <div className="footer-muted" style={{ marginBottom: 12 }}>
               Submit your first breakdown request to see it here.
             </div>
             <Button size="lg" onClick={() => navigate("/submit")}>
-              Submit Request
+              Submit request
             </Button>
           </div>
         ) : (
-          <div className="requests-grid">
-            {requests.map((r) => (
-              <div key={r.id} className="card card-hover request-card">
-                <div className="card-header">
-                  <div>
-                    <h2 className="card-title">
-                      {r.vehicle.make} {r.vehicle.model}
-                    </h2>
-                    <p className="card-subtitle">
-                      <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
-                        {r.id}
-                      </span>{" "}
-                      • {new Date(r.createdAt).toLocaleString()}
-                    </p>
+          <div className="rrq-table">
+            <div className="rrq-table__head">
+              <div className="rrq-th rrq-th--vehicle">Vehicle</div>
+              <div className="rrq-th rrq-th--status">Status</div>
+              <div className="rrq-th rrq-th--actions">Actions</div>
+            </div>
+
+            {rows.map((r) => (
+              <div key={r.id} className="rrq-table__row">
+                <div className="rrq-td rrq-td--vehicle">
+                  <div className="rrq-vehicleTitle">
+                    {r.vehicle.make} {r.vehicle.model}
                   </div>
-                  <div className="card-actions">
-                    <Badge kind={badgeKind(r.status)} title="Current status">
-                      {r.status}
-                    </Badge>
+                  <div className="rrq-vehicleMeta">
+                    <span className="rrq-mono">{r.id}</span>
+                    <span className="rrq-dot">•</span>
+                    <span>{new Date(r.createdAt).toLocaleString()}</span>
                   </div>
                 </div>
 
-                <div className="card-body">
-                  <div className="kv">
-                    <div>
-                      <span className="k">Problem</span>
-                      <span className="v" style={{ fontWeight: 600 }}>
-                        {r.problemDescription}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="k">Location</span>
-                      <span className="v" style={{ fontWeight: 600 }}>
-                        {r.location}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="k">Phone</span>
-                      <span className="v">{r.contactPhone}</span>
-                    </div>
-                  </div>
+                <div className="rrq-td rrq-td--status">
+                  <span className={statusPillClass(r.status)}>{r.status}</span>
+                </div>
 
-                  <div className="divider" />
-
-                  <div className="row">
-                    <ButtonSet onSetStatus={(s) => setStatus(r.id, s)} />
+                <div className="rrq-td rrq-td--actions">
+                  <div className="rrq-actions">
+                    <Button variant="ghost" size="sm" onClick={() => setStatus(r.id, "Pending")}>
+                      Pending
+                    </Button>
+                    <Button variant="secondary-solid" size="sm" onClick={() => setStatus(r.id, "Accepted")}>
+                      Accept
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={() => setStatus(r.id, "Completed")}>
+                      Complete
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -101,23 +99,5 @@ export function MyRequestsPage() {
         )}
       </Card>
     </UserShell>
-  );
-}
-
-// PUBLIC_INTERFACE
-function ButtonSet({ onSetStatus }) {
-  /** Small status-setter button group for the MVP list (UI-only). */
-  return (
-    <>
-      <Button variant="ghost" size="sm" onClick={() => onSetStatus("Pending")}>
-        Pending
-      </Button>
-      <Button variant="secondary-solid" size="sm" onClick={() => onSetStatus("Accepted")}>
-        Accepted
-      </Button>
-      <Button variant="primary" size="sm" onClick={() => onSetStatus("Completed")}>
-        Completed
-      </Button>
-    </>
   );
 }

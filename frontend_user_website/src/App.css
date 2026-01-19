@@ -424,6 +424,172 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
 }
 .request-card .card-body{padding-top: 12px}
 
+/* --- Auth UI refinements (Submit Request / My Requests) --- */
+.rrq-auth-card{
+  /* Match the reference: a slightly narrower card on wide screens */
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+/* Submit Request: sectioned form + bottom action bar */
+.rrq-form{
+  display:flex;
+  flex-direction:column;
+  gap: 14px;
+}
+.rrq-form__section{
+  border: 1px solid rgba(229,231,235,0.9);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.85);
+  padding: 14px;
+}
+.rrq-form__sectionHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.rrq-form__sectionTitle{
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rrq-form__grid2{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.rrq-form__hintBox{
+  border: 1px dashed rgba(37,99,235,0.25);
+  background: rgba(37,99,235,0.06);
+  border-radius: 12px;
+  padding: 12px;
+}
+.rrq-form__hintBoxTitle{
+  font-weight: 900;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.rrq-form__hintBoxText{
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.rrq-form__actions{
+  margin-top: 4px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 0 2px;
+  border-top: 1px solid rgba(229,231,235,0.9);
+}
+.rrq-form__actionsLeft{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+.rrq-form__actionsRight{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* My Requests: table-like layout (reference style) */
+.rrq-clearLink{
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 13px;
+}
+.rrq-clearLink:hover{ text-decoration: underline; }
+
+.rrq-table{
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.9);
+}
+.rrq-table__head{
+  display:grid;
+  grid-template-columns: 1.4fr 0.6fr 1fr;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(37,99,235,0.06), rgba(255,255,255,0));
+}
+.rrq-th{
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--muted);
+  font-weight: 900;
+}
+.rrq-table__row{
+  display:grid;
+  grid-template-columns: 1.4fr 0.6fr 1fr;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(229,231,235,0.85);
+  align-items:center;
+}
+.rrq-table__row:last-child{ border-bottom: 0; }
+
+.rrq-vehicleTitle{
+  font-weight: 900;
+  font-size: 14px;
+}
+.rrq-vehicleMeta{
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rrq-mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.rrq-dot{ opacity: 0.7; }
+
+.rrq-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rrq-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+.rrq-pill--info{
+  border-color: rgba(37,99,235,0.25);
+  background: rgba(37,99,235,0.08);
+  color: #1D4ED8;
+}
+.rrq-pill--warning{
+  border-color: rgba(245,158,11,0.28);
+  background: rgba(245,158,11,0.12);
+  color: #92400E;
+}
+.rrq-pill--success{
+  border-color: rgba(16,185,129,0.25);
+  background: rgba(16,185,129,0.10);
+  color: #065F46;
+}
+
 .empty{
   border: 1px dashed rgba(37,99,235,0.28);
   background: rgba(37,99,235,0.06);
@@ -1064,6 +1230,12 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   .mk-grid2{grid-template-columns: 1fr}
   .mk-ctaBand__inner{justify-content: center}
   .mk-steps{grid-template-columns: 1fr}
+
+  /* Auth pages */
+  .rrq-form__grid2{grid-template-columns: 1fr}
+  .rrq-table__head{grid-template-columns: 1fr; gap: 6px}
+  .rrq-table__row{grid-template-columns: 1fr; gap: 10px}
+  .rrq-actions{justify-content:flex-start}
 }
 
 .footer{
