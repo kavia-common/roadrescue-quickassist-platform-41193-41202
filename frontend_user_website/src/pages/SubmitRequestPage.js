@@ -10,27 +10,58 @@ import { UserShell } from "../components/layout/UserShell";
  * PUBLIC_INTERFACE
  */
 export function SubmitRequestPage() {
-  /** Authenticated request submission (mock/persisted to localStorage). */
+  /** UI-only request submission stored to localStorage via useUserRequests (schema preserved). */
   const navigate = useNavigate();
   const { addRequest } = useUserRequests();
 
-  const [vehicle, setVehicle] = useState({ make: "", model: "" });
-  const [problemDescription, setProblemDescription] = useState("");
-  const [location, setLocation] = useState("");
+  // NOTE: We keep the existing persisted schema:
+  // - vehicle: { make, model }
+  // - problemDescription
+  // - location
+  // - contactPhone
+  //
+  // The additional UI-only fields below do NOT change what is saved.
+  const [vehicleMake, setVehicleMake] = useState("");
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [vehicleYear, setVehicleYear] = useState("");
+  const [licensePlate, setLicensePlate] = useState("");
+
+  const [issueDescription, setIssueDescription] = useState("");
+  const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
+
+  const [breakdownAddress, setBreakdownAddress] = useState("");
+  const [lat, setLat] = useState("");
+  const [lon, setLon] = useState("");
 
   const [status, setStatus] = useState({ type: "", message: "" });
   const [errors, setErrors] = useState({});
 
   const validate = useMemo(() => {
     const next = {};
-    if (!vehicle.make.trim()) next.make = "Required.";
-    if (!vehicle.model.trim()) next.model = "Required.";
-    if (!problemDescription.trim()) next.problemDescription = "Required.";
-    if (!location.trim()) next.location = "Required.";
+    if (!vehicleMake.trim()) next.vehicleMake = "Required.";
+    if (!vehicleModel.trim()) next.vehicleModel = "Required.";
+    if (!issueDescription.trim()) next.issueDescription = "Required.";
+    if (!contactName.trim()) next.contactName = "Required.";
     if (!contactPhone.trim()) next.contactPhone = "Required.";
+    if (!breakdownAddress.trim()) next.breakdownAddress = "Required.";
+    // Latitude/Longitude are present as fields per reference; not required for MVP persistence.
     return next;
-  }, [vehicle.make, vehicle.model, problemDescription, location, contactPhone]);
+  }, [vehicleMake, vehicleModel, issueDescription, contactName, contactPhone, breakdownAddress]);
+
+  const clearForm = () => {
+    setVehicleMake("");
+    setVehicleModel("");
+    setVehicleYear("");
+    setLicensePlate("");
+    setIssueDescription("");
+    setContactName("");
+    setContactPhone("");
+    setBreakdownAddress("");
+    setLat("");
+    setLon("");
+    setErrors({});
+  };
 
   const onSubmit = (e) => {
     e.preventDefault();
@@ -43,177 +74,160 @@ export function SubmitRequestPage() {
       return;
     }
 
+    // Persist ONLY the existing schema (do not change localStorage payload shape/policies).
     addRequest({
-      vehicle,
-      problemDescription,
-      location,
+      vehicle: {
+        make: vehicleMake,
+        model: vehicleModel,
+      },
+      problemDescription: issueDescription,
+      location: breakdownAddress,
       contactPhone,
     });
 
-    setStatus({ type: "success", message: "Request submitted successfully (mock). You can view it in My Requests." });
+    setStatus({
+      type: "success",
+      message: "Request submitted successfully (mock). You can view it in My Requests.",
+    });
 
-    // Clear form
-    setVehicle({ make: "", model: "" });
-    setProblemDescription("");
-    setLocation("");
-    setContactPhone("");
-    setErrors({});
+    clearForm();
+  };
+
+  const onFindLocation = () => {
+    // UI-only per request. No geolocation/maps in MVP.
+    setStatus({
+      type: "info",
+      message: "Find Location is UI-only in this MVP (no geolocation).",
+    });
   };
 
   return (
-    <UserShell
-      title="Submit a breakdown request"
-      subtitle="Describe the issue and your location. This MVP stores requests locally in your browser."
-    >
-      <Card
-        title="Request details"
-        subtitle="No backend call yet — stored locally in your browser."
-        className="rrq-auth-card"
-      >
-        {status.message ? (
-          <div
-            className={`alert ${
-              status.type === "success" ? "alert-success" : status.type === "error" ? "alert-error" : "alert-info"
-            }`}
-            style={{ marginBottom: 12 }}
-          >
-            {status.message}
-          </div>
-        ) : null}
-
-        <form onSubmit={onSubmit} className="rrq-form">
-          {/* Section: Vehicle */}
-          <div className="rrq-form__section">
-            <div className="rrq-form__sectionHead">
-              <div className="rrq-form__sectionTitle">Vehicle</div>
-            </div>
-
-            <div className="rrq-form__grid2">
-              <Input
-                label="Make"
-                name="make"
-                value={vehicle.make}
-                onChange={(e) => setVehicle((v) => ({ ...v, make: e.target.value }))}
-                required
-                error={errors.make}
-                placeholder="e.g., Toyota"
-              />
-              <Input
-                label="Model"
-                name="model"
-                value={vehicle.model}
-                onChange={(e) => setVehicle((v) => ({ ...v, model: e.target.value }))}
-                required
-                error={errors.model}
-                placeholder="e.g., Corolla"
-              />
-            </div>
-          </div>
-
-          {/* Section: Problem */}
-          <div className="rrq-form__section">
-            <div className="rrq-form__sectionHead">
-              <div className="rrq-form__sectionTitle">Problem description</div>
-            </div>
-
-            <div className="field">
-              <label className="label" htmlFor="problemDescription">
-                Description <span className="req">*</span>
-              </label>
-              <textarea
-                id="problemDescription"
-                className={`textarea ${errors.problemDescription ? "input-error" : ""}`}
-                value={problemDescription}
-                onChange={(e) => setProblemDescription(e.target.value)}
-                placeholder="Flat tire, battery issue, engine trouble, warning lights…"
-                rows={4}
-              />
-              {errors.problemDescription ? <div className="error">{errors.problemDescription}</div> : null}
-            </div>
-          </div>
-
-          {/* Section: Location */}
-          <div className="rrq-form__section">
-            <div className="rrq-form__sectionHead">
-              <div className="rrq-form__sectionTitle">Location (free text)</div>
-            </div>
-
-            <div className="field">
-              <label className="label" htmlFor="location">
-                Location <span className="req">*</span>
-              </label>
-              <textarea
-                id="location"
-                className={`textarea ${errors.location ? "input-error" : ""}`}
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Area, city, nearby landmark, or any helpful info."
-                rows={3}
-              />
-              {errors.location ? <div className="error">{errors.location}</div> : null}
-              <div className="hint">MVP: free text only (no maps/geocoding).</div>
-            </div>
-          </div>
-
-          {/* Section: Contact */}
-          <div className="rrq-form__section">
-            <div className="rrq-form__sectionHead">
-              <div className="rrq-form__sectionTitle">Contact</div>
-            </div>
-
-            <div className="rrq-form__grid2">
-              <Input
-                label="Phone number"
-                name="contactPhone"
-                value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
-                required
-                error={errors.contactPhone}
-                placeholder="e.g., +1 555-123-4567"
-              />
-
-              {/* Spacer to match the 2-column look from the reference */}
-              <div className="rrq-form__hintBox" aria-hidden="true">
-                <div className="rrq-form__hintBoxTitle">Tip</div>
-                <div className="rrq-form__hintBoxText">Include a number you can answer quickly so help can reach you.</div>
+    <UserShell title="Submit a breakdown request">
+      <div className="rrq-sr">
+        {/* Left: form card */}
+        <div className="rrq-sr__left">
+          <Card title="Request details" subtitle="No backend call yet — stored locally in your browser." className="rrq-auth-card">
+            {status.message ? (
+              <div
+                className={`alert ${
+                  status.type === "success" ? "alert-success" : status.type === "error" ? "alert-error" : "alert-info"
+                }`}
+                style={{ marginBottom: 12 }}
+              >
+                {status.message}
               </div>
-            </div>
-          </div>
+            ) : null}
 
-          {/* Bottom action bar (matches reference positioning/feel) */}
-          <div className="rrq-form__actions">
-            <div className="rrq-form__actionsLeft">
-              <Button
-                variant="ghost"
-                type="button"
-                onClick={() => {
-                  setVehicle({ make: "", model: "" });
-                  setProblemDescription("");
-                  setLocation("");
-                  setContactPhone("");
-                  setErrors({});
-                  setStatus({ type: "info", message: "Form cleared." });
-                }}
-              >
-                Clear form
-              </Button>
-            </div>
+            <form onSubmit={onSubmit} className="rrq-sr__form">
+              <div className="rrq-sr__grid2">
+                <Input
+                  label="Make"
+                  name="vehicleMake"
+                  value={vehicleMake}
+                  onChange={(e) => setVehicleMake(e.target.value)}
+                  required
+                  error={errors.vehicleMake}
+                />
+                <Input
+                  label="Model"
+                  name="vehicleModel"
+                  value={vehicleModel}
+                  onChange={(e) => setVehicleModel(e.target.value)}
+                  required
+                  error={errors.vehicleModel}
+                />
+                <Input
+                  label="Year"
+                  name="vehicleYear"
+                  value={vehicleYear}
+                  onChange={(e) => setVehicleYear(e.target.value)}
+                  placeholder=""
+                />
+                <Input
+                  label="License Plate"
+                  name="licensePlate"
+                  value={licensePlate}
+                  onChange={(e) => setLicensePlate(e.target.value)}
+                  placeholder=""
+                />
+              </div>
 
-            <div className="rrq-form__actionsRight">
-              <Button
-                variant="secondary-outline"
-                type="button"
-                onClick={() => {
-                  navigate(-1);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit">Submit request</Button>
-            </div>
+              <div className="rrq-sr__full">
+                <div className="field">
+                  <label className="label" htmlFor="issueDescription">
+                    Issue Description <span className="req">*</span>
+                  </label>
+                  <textarea
+                    id="issueDescription"
+                    className={`textarea ${errors.issueDescription ? "input-error" : ""}`}
+                    value={issueDescription}
+                    onChange={(e) => setIssueDescription(e.target.value)}
+                    rows={4}
+                  />
+                  {errors.issueDescription ? <div className="error">{errors.issueDescription}</div> : null}
+                </div>
+              </div>
+
+              <div className="rrq-sr__grid2">
+                <Input
+                  label="Contact Name"
+                  name="contactName"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  required
+                  error={errors.contactName}
+                />
+                <Input
+                  label="Contact Phone"
+                  name="contactPhone"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  required
+                  error={errors.contactPhone}
+                />
+              </div>
+
+              <div className="rrq-sr__full">
+                <div className="field">
+                  <label className="label" htmlFor="breakdownAddress">
+                    Breakdown Address <span className="req">*</span>
+                  </label>
+                  <div className="rrq-sr__addressRow">
+                    <input
+                      id="breakdownAddress"
+                      className={`input ${errors.breakdownAddress ? "input-error" : ""}`}
+                      value={breakdownAddress}
+                      onChange={(e) => setBreakdownAddress(e.target.value)}
+                    />
+                    <Button type="button" variant="secondary-outline" onClick={onFindLocation} className="rrq-sr__findBtn">
+                      Find Location
+                    </Button>
+                  </div>
+                  {errors.breakdownAddress ? <div className="error">{errors.breakdownAddress}</div> : null}
+                </div>
+              </div>
+
+              <div className="rrq-sr__grid2">
+                <Input label="Latitude" name="lat" value={lat} onChange={(e) => setLat(e.target.value)} />
+                <Input label="Longitude" name="lon" value={lon} onChange={(e) => setLon(e.target.value)} />
+              </div>
+
+              <div className="rrq-sr__actions">
+                <Button type="submit">Submit Request</Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+
+        {/* Right: side actions (as in reference) */}
+        <div className="rrq-sr__right">
+          <div className="rrq-sr__rightCard">
+            <Button variant="secondary-solid" onClick={() => navigate("/requests")} className="rrq-sr__viewBtn">
+              View My Requests
+            </Button>
           </div>
-        </form>
-      </Card>
+        </div>
+      </div>
     </UserShell>
   );
 }

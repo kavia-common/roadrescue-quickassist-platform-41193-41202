@@ -20,31 +20,27 @@ function statusPillClass(status) {
 
 // PUBLIC_INTERFACE
 export function MyRequestsPage() {
-  /** Lists mock requests from localStorage. */
+  /** Lists mock requests from localStorage. UI-only changes. */
   const navigate = useNavigate();
   const { requests, setStatus, clearAll } = useUserRequests();
 
   const rows = useMemo(() => requests, [requests]);
 
   return (
-    <UserShell title="My requests" subtitle="All requests are stored locally for this MVP (refresh-safe via localStorage).">
-      <Card
-        title="Requests"
-        subtitle={rows.length ? "Newest first." : "No requests yet."}
-        className="rrq-auth-card"
-        actions={
-          rows.length ? (
-            <button
-              type="button"
-              className="rrq-clearLink"
-              onClick={clearAll}
-              style={{ background: "transparent", border: 0, cursor: "pointer" }}
-            >
-              Clear request history
-            </button>
-          ) : null
-        }
-      >
+    <UserShell title="Breakdown Requests">
+      <div className="rrq-mrTop">
+        <Button variant="ghost" onClick={() => navigate("/submit")}>
+          Back to Submit Request
+        </Button>
+
+        {rows.length ? (
+          <button type="button" className="rrq-clearLink" onClick={clearAll} style={{ background: "transparent", border: 0 }}>
+            Clear request history
+          </button>
+        ) : null}
+      </div>
+
+      <Card title="Request History" subtitle={rows.length ? "Newest first." : "No requests yet."} className="rrq-auth-card">
         {rows.length === 0 ? (
           <div className="empty">
             <div style={{ fontWeight: 900, marginBottom: 6 }}>No requests yet</div>
@@ -56,32 +52,23 @@ export function MyRequestsPage() {
             </Button>
           </div>
         ) : (
-          <div className="rrq-table">
-            <div className="rrq-table__head">
-              <div className="rrq-th rrq-th--vehicle">Vehicle</div>
-              <div className="rrq-th rrq-th--status">Status</div>
-              <div className="rrq-th rrq-th--actions">Actions</div>
-            </div>
-
+          <div className="rrq-mrList" role="list">
             {rows.map((r) => (
-              <div key={r.id} className="rrq-table__row">
-                <div className="rrq-td rrq-td--vehicle">
-                  <div className="rrq-vehicleTitle">
+              <div key={r.id} className="rrq-mrRow" role="listitem">
+                <div className="rrq-mrRow__left">
+                  <div className="rrq-mrRow__title">
                     {r.vehicle.make} {r.vehicle.model}
                   </div>
-                  <div className="rrq-vehicleMeta">
+                  <div className="rrq-mrRow__meta">
                     <span className="rrq-mono">{r.id}</span>
                     <span className="rrq-dot">•</span>
                     <span>{new Date(r.createdAt).toLocaleString()}</span>
                   </div>
                 </div>
 
-                <div className="rrq-td rrq-td--status">
+                <div className="rrq-mrRow__right">
                   <span className={statusPillClass(r.status)}>{r.status}</span>
-                </div>
-
-                <div className="rrq-td rrq-td--actions">
-                  <div className="rrq-actions">
+                  <div className="rrq-mrRow__actions">
                     <Button variant="ghost" size="sm" onClick={() => setStatus(r.id, "Pending")}>
                       Pending
                     </Button>

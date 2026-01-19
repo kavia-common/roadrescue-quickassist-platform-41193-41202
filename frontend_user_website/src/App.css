@@ -431,6 +431,101 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   margin: 0 auto;
 }
 
+/* ===== Reference-matching Submit Request layout (left form + right action) ===== */
+.rrq-sr{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 16px;
+  align-items: start;
+}
+.rrq-sr__left{min-width: 0}
+.rrq-sr__right{min-width: 0}
+.rrq-sr__rightCard{
+  position: sticky;
+  top: 78px; /* align with sidebar sticky top */
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 12px;
+}
+.rrq-sr__form{
+  display: grid;
+  gap: 12px;
+}
+.rrq-sr__grid2{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.rrq-sr__addressRow{
+  display:grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+.rrq-sr__findBtn{
+  height: 40px;
+  white-space: nowrap;
+}
+.rrq-sr__actions{
+  padding-top: 2px;
+}
+.rrq-sr__viewBtn{
+  width: 100%;
+}
+
+/* ===== Reference-matching My Requests header + list ===== */
+.rrq-mrTop{
+  max-width: 920px;
+  margin: 0 auto 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+}
+.rrq-mrList{
+  display:grid;
+  gap: 10px;
+}
+.rrq-mrRow{
+  display:grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items:center;
+  border: 1px solid rgba(229,231,235,0.9);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.85);
+  padding: 12px 14px;
+}
+.rrq-mrRow__title{
+  font-weight: 900;
+  font-size: 14px;
+}
+.rrq-mrRow__meta{
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rrq-mrRow__right{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.rrq-mrRow__actions{
+  display:flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 /* Submit Request: sectioned form + bottom action bar */
 .rrq-form{
   display:flex;
@@ -1236,6 +1331,16 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   .rrq-table__head{grid-template-columns: 1fr; gap: 6px}
   .rrq-table__row{grid-template-columns: 1fr; gap: 10px}
   .rrq-actions{justify-content:flex-start}
+
+  /* Submit Request / My Requests reference layouts */
+  .rrq-sr{grid-template-columns: 1fr}
+  .rrq-sr__grid2{grid-template-columns: 1fr}
+  .rrq-sr__addressRow{grid-template-columns: 1fr}
+  .rrq-sr__rightCard{position: static}
+  .rrq-mrTop{flex-direction: column; align-items: flex-start}
+  .rrq-mrRow{grid-template-columns: 1fr}
+  .rrq-mrRow__right{justify-content: flex-start}
+  .rrq-mrRow__actions{justify-content: flex-start}
 }
 
 .footer{
