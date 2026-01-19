@@ -14,21 +14,31 @@ function getPrefersReducedMotion() {
  * - data-reveal-stagger
  *
  * Each direct child receives a CSS variable (--reveal-delay) that CSS consumes via transition-delay.
- * This keeps the behavior UI-only, low-cost, and easy to tweak in CSS.
+ *
+ * Improvements:
+ * - Default step tuned to ~80ms for a modest, professional cadence.
+ * - Delay is capped (default 360ms) to avoid huge delays on large grids.
+ * - Step/cap can be overridden via data attributes:
+ *   - data-reveal-stagger-step="80"
+ *   - data-reveal-stagger-cap="360"
  */
 function applyStaggerDelays(root = document) {
   const containers = Array.from(root.querySelectorAll("[data-reveal-stagger]"));
 
   containers.forEach((container) => {
     const stepMsRaw = container.getAttribute("data-reveal-stagger-step");
-    const stepMs = Number.isFinite(Number(stepMsRaw)) ? Number(stepMsRaw) : 55;
+    const stepMs = Number.isFinite(Number(stepMsRaw)) ? Number(stepMsRaw) : 80;
+
+    const capMsRaw = container.getAttribute("data-reveal-stagger-cap");
+    const capMs = Number.isFinite(Number(capMsRaw)) ? Number(capMsRaw) : 360;
 
     const children = Array.from(container.children).filter(
       (el) => el && el.nodeType === 1 && !el.hasAttribute("data-reveal-stagger-ignore")
     );
 
     children.forEach((child, idx) => {
-      child.style.setProperty("--reveal-delay", `${idx * stepMs}ms`);
+      const delay = Math.min(idx * stepMs, capMs);
+      child.style.setProperty("--reveal-delay", `${delay}ms`);
     });
   });
 }
@@ -63,8 +73,15 @@ export function useScrollReveal(options = {}) {
 
     const {
       root = null,
-      rootMargin = "0px 0px -10% 0px",
-      threshold = 0.15,
+      /**
+       * Trigger slightly earlier so elements animate just before fully in view.
+       * Negative bottom margin means "consider it intersecting" sooner.
+       */
+      rootMargin = "0px 0px -18% 0px",
+      /**
+       * Slightly lower threshold so the reveal starts earlier and feels more responsive.
+       */
+      threshold = 0.08,
       once = true,
     } = options;
 
