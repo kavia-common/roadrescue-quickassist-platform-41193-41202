@@ -55,19 +55,18 @@ export function Navbar() {
           style={{
             display: "inline-flex",
             alignItems: "center",
-            // Slightly tighter logo↔text spacing while remaining responsive.
-            gap: "clamp(8px, 1.4vw, 12px)",
+            // Keep spacing balanced as the logo grows (responsive).
+            gap: "clamp(9px, 1.6vw, 14px)",
           }}
         >
           <img
             src="/assets/roadrescue-logo.jpeg"
             alt="RoadRescue logo"
             style={{
-              // Slightly larger logo for better visibility while keeping the navbar height stable.
+              // Slightly larger again for better visibility while keeping the navbar height stable.
               // Uses a responsive clamp so it scales down on smaller screens.
-              // Bumped max from ~52px to ~58px.
-              height: "clamp(36px, 5.2vw, 58px)",
-              width: "clamp(36px, 5.2vw, 58px)", // enforce square so borderRadius produces a perfect circle
+              height: "clamp(38px, 5.6vw, 64px)",
+              width: "clamp(38px, 5.6vw, 64px)", // enforce square so borderRadius produces a perfect circle
               objectFit: "cover", // fills the circle; avoids letterboxing that can look non-circular
               display: "block",
               flex: "0 0 auto",
