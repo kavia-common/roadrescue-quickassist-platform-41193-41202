@@ -4,6 +4,42 @@ import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { useUserRequests } from "../hooks/useUserRequests";
 import { UserShell } from "../components/layout/UserShell";
+import { LocationMap } from "../components/LocationMap";
+
+async function geocodeAddressNominatim(address) {
+  // Use OpenStreetMap Nominatim for client-side geocoding (no backend required).
+  // Note: Nominatim usage policy recommends a proper User-Agent; browsers restrict it.
+  // We keep the request simple and include `accept-language` to improve relevance.
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("q", address);
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      "Accept-Language": "en",
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Geocoding failed (HTTP ${res.status}).`);
+  }
+
+  const data = await res.json();
+  const first = Array.isArray(data) ? data[0] : null;
+  if (!first?.lat || !first?.lon) {
+    return null;
+  }
+
+  const latitude = Number(first.lat);
+  const longitude = Number(first.lon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  return { latitude, longitude };
+}
 
 /**
  * PUBLIC_INTERFACE
@@ -32,6 +68,9 @@ export function SubmitRequestPage() {
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
 
+  const [showMap, setShowMap] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+
   const [status, setStatus] = useState({ type: "", message: "" });
   const [errors, setErrors] = useState({});
 
@@ -58,6 +97,8 @@ export function SubmitRequestPage() {
     setBreakdownAddress("");
     setLat("");
     setLon("");
+    setShowMap(false);
+    setIsGeocoding(false);
     setErrors({});
     setStatus({ type: "", message: "" });
   };
@@ -92,13 +133,48 @@ export function SubmitRequestPage() {
     clearForm();
   };
 
-  const onFindLocation = () => {
-    // UI-only per request. No geolocation/maps in MVP.
-    setStatus({
-      type: "info",
-      message: "Find Location is UI-only in this MVP (no geolocation).",
-    });
+  const onFindLocation = async () => {
+    const address = breakdownAddress.trim();
+    if (!address) {
+      setStatus({ type: "error", message: "Please enter an address to find the location." });
+      setShowMap(false);
+      return;
+    }
+
+    setIsGeocoding(true);
+    setStatus({ type: "info", message: "Finding location…" });
+
+    try {
+      const result = await geocodeAddressNominatim(address);
+      if (!result) {
+        setShowMap(false);
+        setStatus({
+          type: "error",
+          message: "Could not find a location for that address. Please refine it and try again.",
+        });
+        return;
+      }
+
+      // Preserve prior UX: autofill the Latitude/Longitude fields and show a map marker.
+      setLat(String(result.latitude));
+      setLon(String(result.longitude));
+      setShowMap(true);
+
+      setStatus({
+        type: "success",
+        message: "Location found. Latitude/Longitude were auto-filled.",
+      });
+    } catch (e) {
+      setShowMap(false);
+      setStatus({ type: "error", message: e?.message || "Could not geocode that address." });
+    } finally {
+      setIsGeocoding(false);
+    }
   };
+
+  const parsedLat = Number(lat);
+  const parsedLon = Number(lon);
+  const canShowMapFromCoords = Number.isFinite(parsedLat) && Number.isFinite(parsedLon);
 
   return (
     <UserShell title="Submit a breakdown request">
@@ -204,8 +280,14 @@ export function SubmitRequestPage() {
                   onChange={(e) => setBreakdownAddress(e.target.value)}
                   placeholder="Enter your location..."
                 />
-                <Button type="button" variant="secondary-outline" onClick={onFindLocation} className="rrq-srFindBtn">
-                  Find Location
+                <Button
+                  type="button"
+                  variant="secondary-outline"
+                  onClick={onFindLocation}
+                  className="rrq-srFindBtn"
+                  disabled={isGeocoding}
+                >
+                  {isGeocoding ? "Finding…" : "Find Location"}
                 </Button>
               </div>
 
@@ -229,6 +311,17 @@ export function SubmitRequestPage() {
               placeholder="Auto-filled"
             />
           </div>
+
+          {showMap && canShowMapFromCoords ? (
+            <div
+              className="rrq-srFull"
+              onWheel={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+            >
+              <LocationMap lat={parsedLat} lon={parsedLon} address={breakdownAddress} height={320} />
+            </div>
+          ) : null}
 
           <div className="rrq-srActions">
             <Button type="button" variant="ghost" onClick={clearForm}>
