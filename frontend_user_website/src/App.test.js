@@ -3,6 +3,6 @@ import App from "./App";
 
 test("renders brand name", () => {
   render(<App />);
-  const brandLink = screen.getByRole("link", { name: /RoadRescue/i });
+  const brandLink = screen.getByRole("link", { name: /RoadRescue home/i });
   expect(brandLink).toBeInTheDocument();
 });

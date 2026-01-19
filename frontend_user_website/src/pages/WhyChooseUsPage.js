@@ -4,8 +4,10 @@ import { Card } from "../components/ui/Card";
 const propsList = [
   { icon: "⚡", title: "Fast response", text: "Quick, clean request intake with instant confirmation." },
   { icon: "✅", title: "Vetted mechanics", text: "In the full product, mechanics are reviewed and approved." },
-  { icon: "💬", title: "Transparent pricing (MVP note)", text: "Pricing is planned for later iterations; MVP focuses on workflow." },
-  { icon: "🔒", title: "Secure & simple", text: "Designed to plug into Supabase auth later without reworking UI." },
+  { icon: "🧭", title: "Clear flow", text: "Submit → track → resolve, with minimal steps and modern UI patterns." },
+  { icon: "📱", title: "Mobile-first", text: "Designed to feel great on phones with polished navigation and spacing." },
+  { icon: "🔒", title: "Secure-ready", text: "Built to plug into Supabase auth & data without reworking the layout." },
+  { icon: "💬", title: "Transparent status", text: "Status badges keep you informed at a glance (MVP simulation)." },
 ];
 
 // PUBLIC_INTERFACE
@@ -18,7 +20,7 @@ export function WhyChooseUsPage() {
         <p className="lead">A modern, lightweight experience built for clarity and trust.</p>
       </div>
 
-      <div className="grid2">
+      <div className="grid3">
         {propsList.map((p) => (
           <Card key={p.title} title={p.title} subtitle={p.text}>
             <div className="icon-tile" aria-hidden="true">

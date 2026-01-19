@@ -27,8 +27,12 @@ export function RegisterPage() {
 
     setBusy(true);
     try {
+      // Important: context updates immediately; navbar re-renders without refresh.
       await register(email.trim(), password);
+
       setStatus({ type: "success", message: "Account created. Redirecting…" });
+
+      // Navigate immediately after register.
       navigate("/submit", { replace: true });
     } catch (err) {
       setStatus({ type: "error", message: err?.message || "Registration failed." });
@@ -82,8 +86,17 @@ export function RegisterPage() {
           />
 
           <div className="row">
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" size="lg" disabled={busy}>
               {busy ? "Creating…" : "Create account"}
+            </Button>
+            <Button
+              variant="secondary-outline"
+              size="lg"
+              type="button"
+              disabled={busy}
+              onClick={() => navigate("/how-it-works")}
+            >
+              Learn How It Works
             </Button>
           </div>
         </form>

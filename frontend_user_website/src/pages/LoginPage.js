@@ -36,8 +36,12 @@ export function LoginPage() {
 
     setBusy(true);
     try {
+      // Important: context updates immediately; navbar re-renders without refresh.
       await login(email.trim(), password);
+
       setStatus({ type: "success", message: "Logged in successfully. Redirecting…" });
+
+      // Navigate immediately after login.
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setStatus({ type: "error", message: err?.message || "Login failed." });
@@ -84,12 +88,18 @@ export function LoginPage() {
           />
 
           <div className="row">
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" size="lg" disabled={busy}>
               {busy ? "Signing in…" : "Sign in"}
             </Button>
-            <Link className="link" to="/about">
-              About
-            </Link>
+            <Button
+              variant="secondary-outline"
+              size="lg"
+              type="button"
+              disabled={busy}
+              onClick={() => navigate("/how-it-works")}
+            >
+              Learn How It Works
+            </Button>
           </div>
         </form>
 

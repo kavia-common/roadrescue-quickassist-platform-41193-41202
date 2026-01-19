@@ -1,14 +1,17 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { useUserRequests } from "../hooks/useUserRequests";
+import { UserShell } from "../components/layout/UserShell";
 
 /**
  * PUBLIC_INTERFACE
  */
 export function SubmitRequestPage() {
   /** Authenticated request submission (mock/persisted to localStorage). */
+  const navigate = useNavigate();
   const { addRequest } = useUserRequests();
 
   const [vehicle, setVehicle] = useState({ make: "", model: "" });
@@ -58,15 +61,18 @@ export function SubmitRequestPage() {
   };
 
   return (
-    <div className="container">
-      <div className="hero">
-        <h1 className="h1">Submit Request</h1>
-        <p className="lead">Tell us what happened and where you are. We’ll keep the flow simple for the MVP.</p>
-      </div>
-
+    <UserShell
+      title="Submit Request"
+      subtitle="Tell us what happened and where you are. This MVP stores requests locally in your browser."
+    >
       <Card title="Request details" subtitle="No backend call yet — stored locally in your browser.">
         {status.message ? (
-          <div className={`alert ${status.type === "success" ? "alert-success" : status.type === "error" ? "alert-error" : "alert-info"}`} style={{ marginBottom: 12 }}>
+          <div
+            className={`alert ${
+              status.type === "success" ? "alert-success" : status.type === "error" ? "alert-error" : "alert-info"
+            }`}
+            style={{ marginBottom: 12 }}
+          >
             {status.message}
           </div>
         ) : null}
@@ -133,7 +139,19 @@ export function SubmitRequestPage() {
           />
 
           <div className="row">
-            <Button type="submit">Submit request</Button>
+            <Button type="submit" size="lg">
+              Submit request
+            </Button>
+            <Button
+              variant="secondary-outline"
+              type="button"
+              size="lg"
+              onClick={() => {
+                navigate(-1);
+              }}
+            >
+              Cancel
+            </Button>
             <Button
               variant="ghost"
               type="button"
@@ -151,6 +169,6 @@ export function SubmitRequestPage() {
           </div>
         </form>
       </Card>
-    </div>
+    </UserShell>
   );
 }

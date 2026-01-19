@@ -9,34 +9,39 @@ function navLinkClass({ isActive }) {
 
 // PUBLIC_INTERFACE
 export function Navbar() {
-  /** Sticky responsive navigation with role-based links. */
+  /** Sticky responsive navigation with role-based links (UI-only). */
   const navigate = useNavigate();
   const { isAuthenticated, role, logout } = useAuth();
   const [open, setOpen] = useState(false);
 
-  const links = useMemo(() => {
-    if (isAuthenticated && role === "user") {
-      return [
-        { to: "/submit", label: "Submit Request" },
-        { to: "/requests", label: "My Requests" },
-        { to: "/about", label: "About" },
-      ];
-    }
-
-    return [
+  const publicLinks = useMemo(
+    () => [
       { to: "/", label: "Home" },
       { to: "/how-it-works", label: "How It Works" },
       { to: "/why-choose-us", label: "Why Choose Us" },
       { to: "/about", label: "About" },
-      { to: "/login", label: "Login" },
-      { to: "/register", label: "Register" },
-    ];
-  }, [isAuthenticated, role]);
+    ],
+    []
+  );
+
+  const authedUserLinks = useMemo(
+    () => [
+      { to: "/submit", label: "Submit Request" },
+      { to: "/requests", label: "My Requests" },
+      { to: "/about", label: "About" },
+    ],
+    []
+  );
+
+  const links = useMemo(() => {
+    if (isAuthenticated && role === "user") return authedUserLinks;
+    return publicLinks;
+  }, [isAuthenticated, role, authedUserLinks, publicLinks]);
 
   const onLogout = async () => {
     await logout();
     setOpen(false);
-    navigate("/");
+    navigate("/", { replace: true });
   };
 
   return (
@@ -55,7 +60,24 @@ export function Navbar() {
         </nav>
 
         <div className="nav-right">
-          {isAuthenticated ? (
+          {/* Desktop auth CTAs */}
+          {!isAuthenticated ? (
+            <div className="nav-cta navlinks-desktop" aria-label="Auth actions">
+              <NavLink to="/login" className={({ isActive }) => (isActive ? "navlink active" : "navlink")}>
+                Login
+              </NavLink>
+              <Button
+                variant="secondary-solid"
+                size="md"
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/register");
+                }}
+              >
+                Register
+              </Button>
+            </div>
+          ) : (
             <>
               <span className="chip" title="Signed in role">
                 {role === "user" ? "User" : "Public"}
@@ -64,7 +86,7 @@ export function Navbar() {
                 Logout
               </Button>
             </>
-          ) : null}
+          )}
 
           <button
             type="button"
@@ -92,11 +114,31 @@ export function Navbar() {
               </NavLink>
             ))}
 
-            {isAuthenticated ? (
+            {!isAuthenticated ? (
+              <div className="nav-mobile-cta">
+                <NavLink
+                  to="/login"
+                  className={({ isActive }) => (isActive ? "navlink navlink-mobile active" : "navlink navlink-mobile")}
+                  onClick={() => setOpen(false)}
+                >
+                  Login
+                </NavLink>
+                <Button
+                  variant="secondary-solid"
+                  style={{ width: "100%", marginTop: 8 }}
+                  onClick={() => {
+                    setOpen(false);
+                    navigate("/register");
+                  }}
+                >
+                  Create account
+                </Button>
+              </div>
+            ) : (
               <Button variant="ghost" onClick={onLogout} style={{ width: "100%", marginTop: 8 }}>
                 Logout
               </Button>
-            ) : null}
+            )}
           </div>
         </div>
       ) : null}

@@ -69,6 +69,13 @@ a{color:inherit}
   box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
+.card-hover{
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+.card-hover:hover{
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
 
 .card-header{
   display:flex;
@@ -83,6 +90,11 @@ a{color:inherit}
 .card-subtitle{margin:6px 0 0;color:var(--muted);font-size:13px}
 .card-actions{display:flex; gap:10px; align-items:center}
 .card-body{padding: 16px 18px}
+.card-footer{
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  background: rgba(249,250,251,0.7);
+}
 
 .form{display:flex; flex-direction:column; gap: 12px}
 .field{display:flex; flex-direction:column; gap:6px}
@@ -124,8 +136,22 @@ a{color:inherit}
 .btn:disabled{opacity:0.6; cursor:not-allowed; transform:none}
 
 .btn-primary{background: var(--primary); color:#fff}
-.btn-secondary{background: var(--secondary); color:#111827}
 .btn-danger{background: var(--error); color:#fff}
+
+/* Secondary variants (amber) */
+.btn-secondary-outline{
+  background: transparent;
+  color: #92400E;
+  border-color: rgba(245,158,11,0.45);
+  box-shadow: none;
+}
+.btn-secondary-outline:hover{
+  background: rgba(245,158,11,0.10);
+}
+.btn-secondary-solid{
+  background: var(--secondary);
+  color:#111827;
+}
 .btn-ghost{
   background: transparent;
   color: var(--text);
@@ -133,6 +159,7 @@ a{color:inherit}
   box-shadow: none;
 }
 .btn-md{font-size: 14px}
+.btn-lg{font-size: 15px; padding: 12px 16px; border-radius: 14px}
 .btn-sm{font-size: 13px; padding: 8px 10px}
 
 .row{
@@ -237,6 +264,7 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   background: rgba(37,99,235,0.10);
 }
 .nav-right{display:flex; align-items:center; gap: 10px}
+.nav-cta{display:flex; align-items:center; gap: 10px}
 .chip{
   font-size: 12px;
   font-weight: 800;
@@ -345,12 +373,78 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   padding: 16px;
 }
 
+/* --- Authenticated layout shell (UserShell) --- */
+.user-shell{padding-top: 12px}
+.user-shell__header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 12px;
+}
+.user-shell__title{margin-bottom: 6px}
+.user-shell__subtitle{margin-top: 0}
+.user-shell__quickNav{
+  margin-top: 10px;
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.user-shell__content{padding-top: 12px}
+.user-shell__grid{
+  display:grid;
+  grid-template-columns: 260px 1fr;
+  gap: 14px;
+  align-items:start;
+}
+.user-shell__sidebarCard{
+  position: sticky;
+  top: 78px; /* below navbar */
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 12px;
+}
+.user-shell__sidebarTitle{
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.user-shell__sidebarLinks{
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+}
+.shell-link{
+  text-decoration:none;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(229,231,235,0.85);
+  background: rgba(255,255,255,0.75);
+  color: var(--text);
+  font-weight: 800;
+}
+.shell-link:hover{
+  background: rgba(37,99,235,0.06);
+  border-color: rgba(37,99,235,0.20);
+}
+.shell-link-active{
+  background: rgba(37,99,235,0.10);
+  border-color: rgba(37,99,235,0.28);
+}
+
 /* Responsive */
 @media (max-width: 960px){
   .grid4{grid-template-columns: repeat(2, minmax(0,1fr))}
   .grid3{grid-template-columns: 1fr}
   .hero-split{grid-template-columns: 1fr}
   .requests-grid{grid-template-columns: 1fr}
+  .user-shell__grid{grid-template-columns: 1fr}
+  .user-shell__sidebarCard{position: static}
 }
 @media (max-width: 720px){
   .grid2{grid-template-columns: 1fr}
@@ -359,6 +453,11 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
 
   .navlinks-desktop{display:none}
   .nav-hamburger{display:inline-flex}
+
+  /* Sidebar collapses behind a toggle on mobile */
+  .user-shell__sidebar{display:none}
+  .user-shell__sidebar.user-shell__sidebar--open{display:block}
+  .user-shell__quickNav{display:none}
 }
 
 .footer{

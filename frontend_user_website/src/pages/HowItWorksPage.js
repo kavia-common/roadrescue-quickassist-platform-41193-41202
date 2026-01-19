@@ -2,10 +2,10 @@ import React from "react";
 import { Card } from "../components/ui/Card";
 
 const steps = [
-  { icon: "📝", title: "Request", text: "Describe your vehicle issue, location, and contact phone." },
-  { icon: "🔎", title: "Match", text: "In the full product, we match you to an available mechanic." },
-  { icon: "📣", title: "Notify", text: "You receive updates as your request progresses through statuses." },
-  { icon: "🛠️", title: "Assist", text: "A mechanic arrives and helps get you back on the road." },
+  { icon: "📝", title: "Submit", text: "Describe the issue, your location, and a contact phone number." },
+  { icon: "🔎", title: "Review", text: "In the full product, we verify details and match you to an available mechanic." },
+  { icon: "📣", title: "Updates", text: "You’ll see status changes as your request progresses." },
+  { icon: "🛠️", title: "Resolution", text: "A mechanic arrives and helps get you back on the road." },
 ];
 
 // PUBLIC_INTERFACE
@@ -15,16 +15,16 @@ export function HowItWorksPage() {
     <div className="container">
       <div className="hero">
         <h1 className="h1">How it works</h1>
-        <p className="lead">A simple 4-step flow designed for a clean MVP experience.</p>
+        <p className="lead">A simple 4-step flow designed for a clean, mobile-friendly MVP experience.</p>
       </div>
 
       <div className="grid4">
-        {steps.map((s) => (
-          <Card key={s.title} title={s.title} subtitle={s.text}>
+        {steps.map((s, idx) => (
+          <Card key={s.title} title={`${idx + 1}. ${s.title}`} subtitle={s.text}>
             <div className="icon-tile" aria-hidden="true">
               <span className="icon">{s.icon}</span>
             </div>
-            <div className="note">Step: {s.title}</div>
+            <div className="note">Step {idx + 1} of 4</div>
           </Card>
         ))}
       </div>
