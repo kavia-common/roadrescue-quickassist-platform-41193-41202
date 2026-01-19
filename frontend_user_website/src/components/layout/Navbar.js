@@ -52,14 +52,21 @@ export function Navbar() {
           className="brand"
           aria-label="RoadRescue home"
           onClick={() => setOpen(false)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 10 }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "clamp(10px, 1.6vw, 12px)",
+          }}
         >
           <img
             src="/assets/roadrescue-logo.jpeg"
             alt="RoadRescue logo"
             style={{
-              height: 30,
-              width: 30,
+              // Slightly larger logo for better visibility while keeping the navbar height stable.
+              // Uses a responsive clamp so it scales down on smaller screens.
+              height: "clamp(32px, 4.5vw, 38px)",
+              width: "auto",
+              aspectRatio: "1 / 1",
               objectFit: "contain",
               display: "block",
               flex: "0 0 auto",
