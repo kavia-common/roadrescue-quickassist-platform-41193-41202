@@ -39,11 +39,16 @@ a{color:inherit}
 
 .main{
   flex:1;
-  padding: 24px 0 48px;
+  /*
+    Slightly more top padding so the sticky navbar doesn't make the first section
+    feel crowded. Keep bottom padding unchanged.
+  */
+  padding: 30px 0 48px;
 }
 
 .container{
-  width: min(1000px, calc(100% - 32px));
+  /* Slightly wider desktop container for more “breathing room” without harming readability on mobile. */
+  width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
 }
 
@@ -82,16 +87,17 @@ a{color:inherit}
   justify-content:space-between;
   align-items:flex-start;
   gap: 16px;
-  padding: 16px 18px;
+  /* Slight increase in padding for breathing room */
+  padding: 18px 20px;
   background: linear-gradient(180deg, rgba(37,99,235,0.06), rgba(255,255,255,0));
   border-bottom: 1px solid var(--border);
 }
 .card-title{margin:0;font-size:16px}
 .card-subtitle{margin:6px 0 0;color:var(--muted);font-size:13px}
 .card-actions{display:flex; gap:10px; align-items:center}
-.card-body{padding: 16px 18px}
+.card-body{padding: 18px 20px}
 .card-footer{
-  padding: 14px 18px;
+  padding: 16px 20px;
   border-top: 1px solid var(--border);
   background: rgba(249,250,251,0.7);
 }
@@ -324,7 +330,7 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   gap: 12px;
 }
 
-.p{margin: 0; color: var(--text); line-height: 1.5}
+.p{margin: 0; color: var(--text); line-height: 1.6}
 .icon-tile{
   margin-top: 10px;
   width: 44px;
@@ -440,16 +446,21 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
 /* --- Home (long-form marketing) --- */
 .home{padding-bottom: 10px}
 .home-hero{
-  padding: 26px 0 8px;
+  /*
+    More vertical breathing room to avoid a “crowded” first fold.
+    Keep responsive with clamp so mobile doesn’t get overly airy.
+  */
+  padding: clamp(34px, 5.4vw, 60px) 0 clamp(16px, 2.8vw, 26px);
 }
 .home-hero__inner{
   text-align: center;
-  max-width: 820px;
+  /* Slightly wider to let the hero headline/subtitle breathe on desktop. */
+  max-width: 900px;
   margin: 0 auto;
   padding: 6px 0 10px;
 }
 .home-eyebrow{
-  margin: 0 0 10px;
+  margin: 0 0 clamp(10px, 1.7vw, 14px);
   font-weight: 900;
   font-size: 12px;
   letter-spacing: 0.14em;
@@ -463,22 +474,24 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   line-height: 1.05;
 }
 .home-subtitle{
-  margin: 12px auto 0;
+  margin: clamp(14px, 2.2vw, 18px) auto 0;
   color: var(--muted);
-  line-height: 1.55;
+  /* Slightly increased for readability */
+  line-height: 1.65;
   font-size: 15px;
-  max-width: 720px;
+  max-width: 760px;
 }
 .home-hero__actions{
-  margin-top: 16px;
+  margin-top: clamp(18px, 2.6vw, 26px);
   display:flex;
   justify-content:center;
   align-items:center;
-  gap: 12px;
+  /* ~25% increase from 12px */
+  gap: 15px;
   flex-wrap: wrap;
 }
 .home-trust{
-  margin-top: 14px;
+  margin-top: clamp(16px, 2.3vw, 22px);
   display:flex;
   justify-content:center;
   align-items:center;
@@ -494,12 +507,16 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   border: 1px solid rgba(37,99,235,0.35);
   box-shadow: var(--shadow-sm);
 }
-.home-section{padding: 12px 0 0}
-.home-section--tight{padding-top: 6px}
-.home-section--footerGap{padding-top: 14px}
+.home-section{
+  /* Larger section separation; still controlled on mobile */
+  padding: clamp(18px, 3.0vw, 28px) 0 0;
+}
+.home-section--tight{padding-top: clamp(12px, 2.2vw, 20px)}
+.home-section--footerGap{padding-top: clamp(18px, 3.0vw, 28px)}
 .home-section__head{
   text-align:center;
-  margin: 16px 0 12px;
+  /* More space between headings and content */
+  margin: clamp(18px, 3.0vw, 30px) 0 clamp(14px, 2.2vw, 20px);
 }
 .home-h2{
   margin: 0;
@@ -514,27 +531,30 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
 .home-grid3{
   display:grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  /* ~25% increase from 12px */
+  gap: 15px;
 }
 .home-featureCard .card-body{padding-top: 12px}
 .home-steps{
   display:grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 10px;
+  /* ~25% increase from 12px */
+  gap: 15px;
+  margin-top: clamp(14px, 2.2vw, 18px);
 }
 .home-step{
   background: rgba(255,255,255,0.85);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
-  padding: 14px 14px 12px;
+  /* more interior padding for “card breathing room” */
+  padding: 16px 16px 14px;
   text-align: center;
 }
 .home-step__icon{
   width: 42px;
   height: 42px;
-  margin: 0 auto 10px;
+  margin: 0 auto clamp(10px, 1.6vw, 14px);
   border-radius: 14px;
   display:flex;
   align-items:center;
@@ -549,14 +569,15 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   margin: 0;
 }
 .home-step__desc{
-  margin-top: 6px;
+  margin-top: 8px;
   color: var(--muted);
   font-size: 13px;
-  line-height: 1.35;
+  line-height: 1.42;
 }
 .home-ctaBand{
-  margin-top: 16px;
-  padding: 18px 0;
+  margin-top: clamp(18px, 3.0vw, 28px);
+  /* More vertical band padding */
+  padding: clamp(22px, 3.4vw, 34px) 0;
   background: linear-gradient(180deg, rgba(17,24,39,0.96), rgba(17,24,39,0.92));
   border-top: 1px solid rgba(229,231,235,0.14);
   border-bottom: 1px solid rgba(229,231,235,0.14);
@@ -565,19 +586,19 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap: 14px;
+  gap: 18px;
   flex-wrap: wrap;
 }
 .home-ctaBand .home-h3{color: #fff}
 .home-ctaBand__subtitle{
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   color: rgba(255,255,255,0.78);
-  line-height: 1.45;
-  max-width: 720px;
+  line-height: 1.55;
+  max-width: 760px;
 }
 .home-ctaBand__actions{display:flex; align-items:center; gap: 10px}
 .home-ctaBand__note{
-  margin-top: 12px;
+  margin-top: 14px;
   color: rgba(255,255,255,0.72);
   font-size: 13px;
 }
