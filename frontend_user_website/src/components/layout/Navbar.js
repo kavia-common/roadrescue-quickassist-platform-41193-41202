@@ -58,10 +58,12 @@ export function Navbar() {
             src="/assets/roadrescue-logo.jpeg"
             alt="RoadRescue logo"
             style={{
-              height: 28,
-              width: 28,
+              height: 30,
+              width: 30,
               objectFit: "contain",
               display: "block",
+              flex: "0 0 auto",
+              borderRadius: "999px",
             }}
           />
           <span>
