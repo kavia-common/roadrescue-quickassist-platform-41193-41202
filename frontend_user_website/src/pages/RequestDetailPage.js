@@ -1,142 +1,181 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card } from "../components/ui/Card";
-import { dataService } from "../services/dataService";
-import { statusLabel } from "../services/statusUtils";
 import { LocationMap } from "../components/LocationMap";
+import { UserShell } from "../components/layout/UserShell";
 
-function isValidCoord(n, min, max) {
-  return typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
+function formatMaybe(v) {
+  const x = v == null ? "" : String(v).trim();
+  return x ? x : "—";
+}
+
+function parseFiniteNumber(v) {
+  const n = typeof v === "number" ? v : Number(String(v || "").trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Local-only data source used by this MVP.
+ * Keep consistent with useUserRequests (localStorage key rrq_user_requests).
+ */
+function getLocalRequests() {
+  try {
+    const raw = localStorage.getItem("rrq_user_requests");
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Map any legacy/local statuses into the user-facing read-only flow:
+ * Open (default) -> Assigned -> Completed
+ */
+function toReadOnlyStatusLabel(rawStatus) {
+  const s = String(rawStatus || "").trim().toLowerCase();
+  if (s === "completed") return "Completed";
+  if (s === "accepted" || s === "assigned") return "Assigned";
+  return "Open";
+}
+
+function statusPillClass(label) {
+  if (label === "Completed") return "rrq-pill rrq-pill--success";
+  if (label === "Assigned") return "rrq-pill rrq-pill--warning";
+  return "rrq-pill rrq-pill--info";
 }
 
 // PUBLIC_INTERFACE
-export function RequestDetailPage({ user }) {
-  /** Detail view for a single request, including persisted address and map. */
+export function RequestDetailPage() {
+  /** Dedicated detail view for a single request (localStorage-backed), including brief + map. */
   const { requestId } = useParams();
-  const [req, setReq] = useState(null);
-  const [error, setError] = useState("");
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const r = await dataService.getRequestById(requestId);
-        if (!r) throw new Error("Request not found.");
-        if (r.userId !== user.id) throw new Error("You do not have access to this request.");
-        if (mounted) setReq(r);
-      } catch (e) {
-        if (mounted) setError(e.message || "Could not load request.");
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [requestId, user.id]);
+  const req = useMemo(() => {
+    const all = getLocalRequests();
+    return all.find((r) => String(r.id) === String(requestId)) || null;
+  }, [requestId]);
 
-  const canShowMap = useMemo(() => {
-    return isValidCoord(req?.lat, -90, 90) && isValidCoord(req?.lon, -180, 180);
-  }, [req?.lat, req?.lon]);
+  const lat = parseFiniteNumber(req?.lat ?? req?.latitude ?? req?.location?.lat);
+  const lon = parseFiniteNumber(req?.lon ?? req?.longitude ?? req?.location?.lon);
 
-  if (error) {
+  const address =
+    String(
+      req?.breakdownAddress ??
+        req?.address ??
+        req?.location ??
+        req?.breakdown_location ??
+        req?.breakdownLocation ??
+        ""
+    ).trim() || "";
+
+  const canShowMap = lat != null && lon != null;
+
+  if (!req) {
     return (
-      <div className="container">
-        <Card title="Request detail">
-          <div className="alert alert-error">{error}</div>
+      <UserShell title="Request Details">
+        <Card title="Request not found" className="rrq-auth-card">
+          <div className="alert alert-error" style={{ marginBottom: 12 }}>
+            We couldn’t find that request in your local request history.
+          </div>
           <Link className="link" to="/requests">
-            ← Back to list
+            ← Back to My Requests
           </Link>
         </Card>
-      </div>
+      </UserShell>
     );
   }
 
-  if (!req)
-    return (
-      <div className="container">
-        <div className="skeleton">Loading…</div>
-      </div>
-    );
+  const statusLabel = toReadOnlyStatusLabel(req.status);
 
   return (
-    <div className="container">
-      <div className="hero">
-        <h1 className="h1">Request {req.id.slice(0, 8)}</h1>
-        <p className="lead">
-          Status: <strong>{statusLabel(req.status)}</strong>
-        </p>
-      </div>
-
-      <div className="grid2">
-        <Card title="Vehicle">
-          <div className="kv">
-            {/* ENFORCED SHAPE: vehicle = { make, model }. Fallback to "" if missing. */}
-            <div>
-              <span className="k">Make</span>
-              <span className="v">{(req.vehicle && req.vehicle.make) || ""}</span>
-            </div>
-            <div>
-              <span className="k">Model</span>
-              <span className="v">{(req.vehicle && req.vehicle.model) || ""}</span>
-            </div>
-            <div>
-              <span className="k">Year</span>
-              <span className="v">—</span>
-            </div>
-            <div>
-              <span className="k">Plate</span>
-              <span className="v">—</span>
-            </div>
-          </div>
-        </Card>
-
-        <Card title="Contact">
-          <div className="kv">
-            <div>
-              <span className="k">Name</span>
-              <span className="v">{req.contact.name}</span>
-            </div>
-            <div>
-              <span className="k">Phone</span>
-              <span className="v">{req.contact.phone}</span>
-            </div>
-            <div>
-              <span className="k">Created</span>
-              <span className="v">{new Date(req.createdAt).toLocaleString()}</span>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <Card title="Breakdown location" subtitle="Saved with the request (no GPS permissions).">
-        {req.address ? (
-          <div className="alert alert-info" style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 800, marginBottom: 4 }}>Address</div>
-            <div style={{ lineHeight: 1.35 }}>{req.address}</div>
-          </div>
-        ) : (
-          <div className="alert alert-info" style={{ marginBottom: 12 }}>
-            No address saved for this request.
-          </div>
-        )}
-
-        {canShowMap ? (
-          <div
-            onWheel={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchMove={(e) => e.stopPropagation()}
-          >
-            <LocationMap lat={req.lat} lon={req.lon} address={req.address || ""} height={300} />
-          </div>
-        ) : null}
-      </Card>
-
-      <Card title="Issue description">
-        <p className="p">{req.issueDescription}</p>
-        <div className="divider" />
+    <UserShell title={`Request ${req.id}`}>
+      <div className="rrq-detailTop">
         <Link className="link" to="/requests">
           ← Back to My Requests
         </Link>
+        <span className={statusPillClass(statusLabel)}>{statusLabel}</span>
+      </div>
+
+      <Card
+        title="Request Details"
+        subtitle={`Created: ${new Date(req.createdAt).toLocaleString()}`}
+        className="rrq-auth-card rrq-detailCard"
+      >
+        <div className="rrq-detailGrid">
+          <div className="rrq-detailBlock">
+            <div className="rrq-detailBlockTitle">Vehicle</div>
+            <div className="rrq-detailKv">
+              <div>
+                <span className="rrq-detailK">Make</span>
+                <span className="rrq-detailV">{formatMaybe(req.vehicle?.make)}</span>
+              </div>
+              <div>
+                <span className="rrq-detailK">Model</span>
+                <span className="rrq-detailV">{formatMaybe(req.vehicle?.model)}</span>
+              </div>
+              <div>
+                <span className="rrq-detailK">Year</span>
+                <span className="rrq-detailV">{formatMaybe(req.vehicle?.year ?? req.year)}</span>
+              </div>
+              <div>
+                <span className="rrq-detailK">License Plate</span>
+                <span className="rrq-detailV">{formatMaybe(req.vehicle?.licensePlate ?? req.licensePlate)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rrq-detailBlock">
+            <div className="rrq-detailBlockTitle">Contact</div>
+            <div className="rrq-detailKv">
+              <div>
+                <span className="rrq-detailK">Name</span>
+                <span className="rrq-detailV">{formatMaybe(req.contactName ?? req.contact?.name)}</span>
+              </div>
+              <div>
+                <span className="rrq-detailK">Phone</span>
+                <span className="rrq-detailV">{formatMaybe(req.contactPhone ?? req.contact?.phone)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rrq-detailBlock rrq-detailBlock--full">
+            <div className="rrq-detailBlockTitle">Breakdown Location</div>
+            <div className="rrq-detailText">{address ? address : "—"}</div>
+          </div>
+
+          <div className="rrq-detailBlock rrq-detailBlock--full">
+            <div className="rrq-detailBlockTitle">Issue Description</div>
+            <div className="rrq-detailText">
+              {formatMaybe(req.issueDescription ?? req.problemDescription ?? req.issue)}
+            </div>
+          </div>
+
+          <div className="rrq-detailBlock">
+            <div className="rrq-detailBlockTitle">Latitude</div>
+            <div className="rrq-detailText">{lat != null ? String(lat) : "—"}</div>
+          </div>
+
+          <div className="rrq-detailBlock">
+            <div className="rrq-detailBlockTitle">Longitude</div>
+            <div className="rrq-detailText">{lon != null ? String(lon) : "—"}</div>
+          </div>
+
+          <div className="rrq-detailBlock rrq-detailBlock--full">
+            <div className="rrq-detailBlockTitle">Map</div>
+            {canShowMap ? (
+              <div
+                onWheel={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+              >
+                <LocationMap lat={lat} lon={lon} address={address} height={320} />
+              </div>
+            ) : (
+              <div className="rrq-detailLocationNote">Location not set.</div>
+            )}
+          </div>
+        </div>
       </Card>
-    </div>
+    </UserShell>
   );
 }

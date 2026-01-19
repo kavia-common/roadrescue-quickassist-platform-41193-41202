@@ -699,6 +699,94 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   text-decoration-thickness: 2px;
 }
 
+/* ===== Request Details (dedicated page) ===== */
+.rrq-detailTop{
+  max-width: 920px;
+  margin: 0 auto 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rrq-detailCard{
+  /* keep consistent with reference-width cards */
+  max-width: 920px;
+}
+
+.rrq-detailGrid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rrq-detailBlock{
+  border: 1px solid rgba(229,231,235,0.9);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.85);
+  padding: 12px;
+  min-width: 0;
+}
+
+.rrq-detailBlock--full{
+  grid-column: 1 / -1;
+}
+
+.rrq-detailBlockTitle{
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.rrq-detailKv{
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+}
+
+.rrq-detailKv > div{
+  display:flex;
+  justify-content:space-between;
+  gap: 14px;
+}
+
+.rrq-detailK{
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.rrq-detailV{
+  font-weight: 800;
+  font-size: 13px;
+  text-align: right;
+}
+
+.rrq-detailText{
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.rrq-detailLocationNote{
+  border: 1px dashed rgba(37,99,235,0.25);
+  background: rgba(37,99,235,0.06);
+  border-radius: 14px;
+  padding: 12px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+@media (max-width: 720px){
+  .rrq-detailGrid{ grid-template-columns: 1fr; }
+}
+
 /* Request Details (modal content) */
 .rrq-rd{
   display: grid;

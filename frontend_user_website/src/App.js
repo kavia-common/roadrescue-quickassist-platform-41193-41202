@@ -20,6 +20,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 // Pages (authed user)
 import { SubmitRequestPage } from "./pages/SubmitRequestPage";
 import { MyRequestsPage } from "./pages/MyRequestsPage";
+import { RequestDetailPage } from "./pages/RequestDetailPage";
 
 /**
  * App root for RoadRescue QuickAssist (User Website).
@@ -64,6 +65,14 @@ function App() {
                   element={
                     <RequireAuth>
                       <MyRequestsPage />
+                    </RequireAuth>
+                  }
+                />
+                <Route
+                  path="/requests/:requestId"
+                  element={
+                    <RequireAuth>
+                      <RequestDetailPage />
                     </RequireAuth>
                   }
                 />
