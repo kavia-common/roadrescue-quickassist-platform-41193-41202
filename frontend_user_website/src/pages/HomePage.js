@@ -88,7 +88,7 @@ export function HomePage() {
             </p>
           </div>
 
-          <div className="mk-grid3">
+          <div className="mk-grid3" data-reveal-stagger>
             <Card
               title="Simple Request Flow"
               subtitle="Vehicle + issue + contact details, captured cleanly."
@@ -142,7 +142,7 @@ export function HomePage() {
             </p>
           </div>
 
-          <div className="mk-grid2">
+          <div className="mk-grid2" data-reveal-stagger>
             <Card title="Less waiting, more clarity" subtitle="Know what’s happening next." className="mk-card">
               <ul className="mk-list">
                 <li>Clear confirmation after submitting a request</li>
@@ -172,7 +172,7 @@ export function HomePage() {
             </p>
           </div>
 
-          <div className="mk-steps" role="list" aria-label="How it works steps preview">
+          <div className="mk-steps" role="list" aria-label="How it works steps preview" data-reveal-stagger>
             <StepCard
               icon="📝"
               title="Request"
@@ -211,7 +211,7 @@ export function HomePage() {
             <p className="mk-lead">UI-only placeholders to illustrate a professional marketing experience.</p>
           </div>
 
-          <div className="mk-grid3">
+          <div className="mk-grid3" data-reveal-stagger>
             <Card title="“Finally, a clean flow.”" subtitle="Priya • Flat tire" className="mk-card">
               <p className="p">
                 “Submitting the request was quick, and the status updates were easy to understand. No back-and-forth.”

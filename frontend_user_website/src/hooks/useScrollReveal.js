@@ -10,11 +10,36 @@ function getPrefersReducedMotion() {
 }
 
 /**
+ * Applies subtle, index-based stagger delays to children of containers marked with:
+ * - data-reveal-stagger
+ *
+ * Each direct child receives a CSS variable (--reveal-delay) that CSS consumes via transition-delay.
+ * This keeps the behavior UI-only, low-cost, and easy to tweak in CSS.
+ */
+function applyStaggerDelays(root = document) {
+  const containers = Array.from(root.querySelectorAll("[data-reveal-stagger]"));
+
+  containers.forEach((container) => {
+    const stepMsRaw = container.getAttribute("data-reveal-stagger-step");
+    const stepMs = Number.isFinite(Number(stepMsRaw)) ? Number(stepMsRaw) : 55;
+
+    const children = Array.from(container.children).filter(
+      (el) => el && el.nodeType === 1 && !el.hasAttribute("data-reveal-stagger-ignore")
+    );
+
+    children.forEach((child, idx) => {
+      child.style.setProperty("--reveal-delay", `${idx * stepMs}ms`);
+    });
+  });
+}
+
+/**
  * Reveal elements as they enter the viewport by applying a `data-reveal="in"` attribute.
  *
  * Usage:
  * - Add `data-reveal` to any element you want animated.
  * - Optionally add `data-reveal-variant="up|down|left|right"` to slightly vary the entrance.
+ * - Add `data-reveal-stagger` to a container to stagger its direct children.
  *
  * This is UI-only and uses IntersectionObserver for performance.
  */
@@ -32,6 +57,9 @@ export function useScrollReveal(options = {}) {
       });
       return;
     }
+
+    // Compute stagger delays once per mount (and re-run if options changes).
+    applyStaggerDelays(document);
 
     const {
       root = null,

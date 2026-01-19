@@ -992,15 +992,25 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   - Optional: set `data-reveal-variant="up|down|left|right"` for slight direction.
 */
 [data-reveal]{
+  /*
+    Subtle + professional:
+    - less travel (8px vs 12px)
+    - slightly snappier duration
+    - softer easing curve
+    - supports optional stagger via --reveal-delay (set by useScrollReveal)
+  */
   opacity: 0;
-  transform: translate3d(0, 12px, 0);
-  transition: opacity 520ms ease, transform 520ms ease;
+  transform: translate3d(0, 8px, 0);
+  transition-property: opacity, transform;
+  transition-duration: 420ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
   will-change: opacity, transform;
 }
 
-[data-reveal][data-reveal-variant="left"]{ transform: translate3d(-12px, 0, 0); }
-[data-reveal][data-reveal-variant="right"]{ transform: translate3d(12px, 0, 0); }
-[data-reveal][data-reveal-variant="down"]{ transform: translate3d(0, -12px, 0); }
+[data-reveal][data-reveal-variant="left"]{ transform: translate3d(-8px, 0, 0); }
+[data-reveal][data-reveal-variant="right"]{ transform: translate3d(8px, 0, 0); }
+[data-reveal][data-reveal-variant="down"]{ transform: translate3d(0, -8px, 0); }
 
 /* When revealed */
 [data-reveal="in"]{

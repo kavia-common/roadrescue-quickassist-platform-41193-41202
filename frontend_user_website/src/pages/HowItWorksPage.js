@@ -127,7 +127,7 @@ export function HowItWorksPage() {
             </p>
           </div>
 
-          <div className="mk-grid2">
+          <div className="mk-grid2" data-reveal-stagger>
             <FlowStep
               n={1}
               icon="📝"

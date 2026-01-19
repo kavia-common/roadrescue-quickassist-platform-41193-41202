@@ -93,7 +93,7 @@ export function AboutPage() {
             </p>
           </div>
 
-          <div className="mk-grid2">
+          <div className="mk-grid2" data-reveal-stagger>
             <Card className="mk-card" title="Driver-first design" subtitle="Built for roadside stress and mobile use.">
               <p className="p">
                 We focus on what drivers actually need at the roadside: a quick way to submit the essentials and a simple
@@ -132,7 +132,7 @@ export function AboutPage() {
             </p>
           </div>
 
-          <div className="mk-grid3">
+          <div className="mk-grid3" data-reveal-stagger>
             <Card className="mk-card" title="Request intake" subtitle="Collect the essentials with minimal friction.">
               <p className="p">
                 Drivers submit vehicle information, issue description, and contact details in a clean form. This makes it
@@ -165,7 +165,7 @@ export function AboutPage() {
             </p>
           </div>
 
-          <div className="mk-grid2">
+          <div className="mk-grid2" data-reveal-stagger>
             <Card className="mk-card" title="Frontend" subtitle="React single-page experience">
               <ul className="mk-list">
                 <li>React-based UI with reusable components</li>
@@ -196,7 +196,7 @@ export function AboutPage() {
             </p>
           </div>
 
-          <div className="mk-grid3">
+          <div className="mk-grid3" data-reveal-stagger>
             <Card className="mk-card" title="Vetted mechanics" subtitle="Support for approvals and workflows">
               <p className="p">
                 The platform is structured to support reviewing and approving mechanics, creating a more reliable service
@@ -226,7 +226,7 @@ export function AboutPage() {
             <p className="mk-lead">UI-only contact form for MVP presentation (no backend submission).</p>
           </div>
 
-          <div className="mk-grid2">
+          <div className="mk-grid2" data-reveal-stagger>
             <Card
               className="mk-card"
               title="Send a message"
@@ -350,7 +350,7 @@ export function AboutPage() {
           </div>
 
           <Card className="mk-card" title="Team" subtitle="Placeholder roles for MVP marketing presentation.">
-            <div className="mk-teamGrid" role="list" aria-label="Team members">
+            <div className="mk-teamGrid" role="list" aria-label="Team members" data-reveal-stagger>
               {team.map((t) => (
                 <div key={t.name} role="listitem">
                   <TeamMember name={t.name} role={t.role} blurb={t.blurb} />

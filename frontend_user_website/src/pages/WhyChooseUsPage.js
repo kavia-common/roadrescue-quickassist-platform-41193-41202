@@ -77,7 +77,7 @@ export function WhyChooseUsPage() {
             </p>
           </div>
 
-          <div className="mk-grid3">
+          <div className="mk-grid3" data-reveal-stagger>
             <Reason
               icon="⚡"
               title="Fast Response Intake"
@@ -186,7 +186,7 @@ export function WhyChooseUsPage() {
             </div>
           </div>
 
-          <div className="mk-grid3" style={{ marginTop: 14 }}>
+          <div className="mk-grid3" style={{ marginTop: 14 }} data-reveal-stagger>
             <Card className="mk-card" title="“Clear updates”" subtitle="Taylor • Towing needed">
               <p className="p">
                 “Having everything in one place helped me stay calm. I didn’t have to keep calling for an update.”
