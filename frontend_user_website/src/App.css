@@ -431,49 +431,48 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   margin: 0 auto;
 }
 
-/* ===== Reference-matching Submit Request layout (left form + right action) ===== */
-.rrq-sr{
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 16px;
-  align-items: start;
+/* ===== Submit Request (reference layout: centered card + bottom actions) ===== */
+.rrq-srCard{
+  /* ensure card width matches reference */
+  max-width: 920px;
 }
-.rrq-sr__left{min-width: 0}
-.rrq-sr__right{min-width: 0}
-.rrq-sr__rightCard{
-  position: sticky;
-  top: 78px; /* align with sidebar sticky top */
-  background: rgba(255,255,255,0.75);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  padding: 12px;
-}
-.rrq-sr__form{
+
+.rrq-srForm{
   display: grid;
   gap: 12px;
 }
-.rrq-sr__grid2{
+
+.rrq-srGrid2{
   display:grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-.rrq-sr__addressRow{
+
+.rrq-srFull{
+  min-width: 0;
+}
+
+.rrq-srAddressRow{
   display:grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
 }
-.rrq-sr__findBtn{
+
+.rrq-srFindBtn{
   height: 40px;
   white-space: nowrap;
 }
-.rrq-sr__actions{
-  padding-top: 2px;
-}
-.rrq-sr__viewBtn{
-  width: 100%;
+
+.rrq-srActions{
+  margin-top: 6px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between; /* left: Clear Form, right: Submit Request */
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid rgba(229,231,235,0.9);
 }
 
 /* ===== Reference-matching My Requests header + list ===== */
@@ -702,59 +701,9 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
 }
 .user-shell__title{margin-bottom: 6px}
 .user-shell__subtitle{margin-top: 0}
-.user-shell__quickNav{
-  margin-top: 10px;
-  display:flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
 .user-shell__content{padding-top: 12px}
-.user-shell__grid{
-  display:grid;
-  grid-template-columns: 260px 1fr;
-  gap: 14px;
-  align-items:start;
-}
-.user-shell__sidebarCard{
-  position: sticky;
-  top: 78px; /* below navbar */
-  background: rgba(255,255,255,0.75);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  padding: 12px;
-}
-.user-shell__sidebarTitle{
-  font-weight: 900;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 10px;
-}
-.user-shell__sidebarLinks{
-  display:flex;
-  flex-direction:column;
-  gap: 6px;
-}
-.shell-link{
-  text-decoration:none;
-  padding: 10px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(229,231,235,0.85);
-  background: rgba(255,255,255,0.75);
-  color: var(--text);
-  font-weight: 800;
-}
-.shell-link:hover{
-  background: rgba(37,99,235,0.06);
-  border-color: rgba(37,99,235,0.20);
-}
-.shell-link-active{
-  background: rgba(37,99,235,0.10);
-  border-color: rgba(37,99,235,0.28);
-}
+.user-shell__main{min-width: 0}
+.user-shell__main--full{width: 100%}
 
 /* --- Home (long-form marketing) --- */
 .home{padding-bottom: 10px}
@@ -1333,10 +1282,9 @@ th{font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: va
   .rrq-actions{justify-content:flex-start}
 
   /* Submit Request / My Requests reference layouts */
-  .rrq-sr{grid-template-columns: 1fr}
-  .rrq-sr__grid2{grid-template-columns: 1fr}
-  .rrq-sr__addressRow{grid-template-columns: 1fr}
-  .rrq-sr__rightCard{position: static}
+  .rrq-srGrid2{grid-template-columns: 1fr}
+  .rrq-srAddressRow{grid-template-columns: 1fr}
+  .rrq-srActions{justify-content:flex-start}
   .rrq-mrTop{flex-direction: column; align-items: flex-start}
   .rrq-mrRow{grid-template-columns: 1fr}
   .rrq-mrRow__right{justify-content: flex-start}

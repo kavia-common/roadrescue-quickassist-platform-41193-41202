@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
@@ -11,7 +10,6 @@ import { UserShell } from "../components/layout/UserShell";
  */
 export function SubmitRequestPage() {
   /** UI-only request submission stored to localStorage via useUserRequests (schema preserved). */
-  const navigate = useNavigate();
   const { addRequest } = useUserRequests();
 
   // NOTE: We keep the existing persisted schema:
@@ -61,6 +59,7 @@ export function SubmitRequestPage() {
     setLat("");
     setLon("");
     setErrors({});
+    setStatus({ type: "", message: "" });
   };
 
   const onSubmit = (e) => {
@@ -103,131 +102,142 @@ export function SubmitRequestPage() {
 
   return (
     <UserShell title="Submit a breakdown request">
-      <div className="rrq-sr">
-        {/* Left: form card */}
-        <div className="rrq-sr__left">
-          <Card title="Request details" subtitle="No backend call yet — stored locally in your browser." className="rrq-auth-card">
-            {status.message ? (
-              <div
-                className={`alert ${
-                  status.type === "success" ? "alert-success" : status.type === "error" ? "alert-error" : "alert-info"
-                }`}
-                style={{ marginBottom: 12 }}
-              >
-                {status.message}
-              </div>
-            ) : null}
-
-            <form onSubmit={onSubmit} className="rrq-sr__form">
-              <div className="rrq-sr__grid2">
-                <Input
-                  label="Make"
-                  name="vehicleMake"
-                  value={vehicleMake}
-                  onChange={(e) => setVehicleMake(e.target.value)}
-                  required
-                  error={errors.vehicleMake}
-                />
-                <Input
-                  label="Model"
-                  name="vehicleModel"
-                  value={vehicleModel}
-                  onChange={(e) => setVehicleModel(e.target.value)}
-                  required
-                  error={errors.vehicleModel}
-                />
-                <Input
-                  label="Year"
-                  name="vehicleYear"
-                  value={vehicleYear}
-                  onChange={(e) => setVehicleYear(e.target.value)}
-                  placeholder=""
-                />
-                <Input
-                  label="License Plate"
-                  name="licensePlate"
-                  value={licensePlate}
-                  onChange={(e) => setLicensePlate(e.target.value)}
-                  placeholder=""
-                />
-              </div>
-
-              <div className="rrq-sr__full">
-                <div className="field">
-                  <label className="label" htmlFor="issueDescription">
-                    Issue Description <span className="req">*</span>
-                  </label>
-                  <textarea
-                    id="issueDescription"
-                    className={`textarea ${errors.issueDescription ? "input-error" : ""}`}
-                    value={issueDescription}
-                    onChange={(e) => setIssueDescription(e.target.value)}
-                    rows={4}
-                  />
-                  {errors.issueDescription ? <div className="error">{errors.issueDescription}</div> : null}
-                </div>
-              </div>
-
-              <div className="rrq-sr__grid2">
-                <Input
-                  label="Contact Name"
-                  name="contactName"
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                  required
-                  error={errors.contactName}
-                />
-                <Input
-                  label="Contact Phone"
-                  name="contactPhone"
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                  required
-                  error={errors.contactPhone}
-                />
-              </div>
-
-              <div className="rrq-sr__full">
-                <div className="field">
-                  <label className="label" htmlFor="breakdownAddress">
-                    Breakdown Address <span className="req">*</span>
-                  </label>
-                  <div className="rrq-sr__addressRow">
-                    <input
-                      id="breakdownAddress"
-                      className={`input ${errors.breakdownAddress ? "input-error" : ""}`}
-                      value={breakdownAddress}
-                      onChange={(e) => setBreakdownAddress(e.target.value)}
-                    />
-                    <Button type="button" variant="secondary-outline" onClick={onFindLocation} className="rrq-sr__findBtn">
-                      Find Location
-                    </Button>
-                  </div>
-                  {errors.breakdownAddress ? <div className="error">{errors.breakdownAddress}</div> : null}
-                </div>
-              </div>
-
-              <div className="rrq-sr__grid2">
-                <Input label="Latitude" name="lat" value={lat} onChange={(e) => setLat(e.target.value)} />
-                <Input label="Longitude" name="lon" value={lon} onChange={(e) => setLon(e.target.value)} />
-              </div>
-
-              <div className="rrq-sr__actions">
-                <Button type="submit">Submit Request</Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-
-        {/* Right: side actions (as in reference) */}
-        <div className="rrq-sr__right">
-          <div className="rrq-sr__rightCard">
-            <Button variant="secondary-solid" onClick={() => navigate("/requests")} className="rrq-sr__viewBtn">
-              View My Requests
-            </Button>
+      <Card
+        title="Request details"
+        subtitle="No backend call yet — stored locally in your browser."
+        className="rrq-auth-card rrq-srCard"
+      >
+        {status.message ? (
+          <div
+            className={`alert ${status.type === "success" ? "alert-success" : status.type === "error" ? "alert-error" : "alert-info"}`}
+            style={{ marginBottom: 12 }}
+          >
+            {status.message}
           </div>
-        </div>
-      </div>
+        ) : null}
+
+        <form onSubmit={onSubmit} className="rrq-srForm" aria-label="Submit breakdown request form">
+          <div className="rrq-srGrid2">
+            <Input
+              label="Make"
+              name="vehicleMake"
+              value={vehicleMake}
+              onChange={(e) => setVehicleMake(e.target.value)}
+              placeholder="e.g., Toyota"
+              required
+              error={errors.vehicleMake}
+            />
+            <Input
+              label="Model"
+              name="vehicleModel"
+              value={vehicleModel}
+              onChange={(e) => setVehicleModel(e.target.value)}
+              placeholder="e.g., Corolla"
+              required
+              error={errors.vehicleModel}
+            />
+            <Input
+              label="Year"
+              name="vehicleYear"
+              value={vehicleYear}
+              onChange={(e) => setVehicleYear(e.target.value)}
+              placeholder="e.g., 2018"
+            />
+            <Input
+              label="License Plate"
+              name="licensePlate"
+              value={licensePlate}
+              onChange={(e) => setLicensePlate(e.target.value)}
+              placeholder="e.g., ABC-1234"
+            />
+          </div>
+
+          <div className="rrq-srFull">
+            <div className="field">
+              <label className="label" htmlFor="issueDescription">
+                Issue Description <span className="req">*</span>
+              </label>
+              <textarea
+                id="issueDescription"
+                className={`textarea ${errors.issueDescription ? "input-error" : ""}`}
+                value={issueDescription}
+                onChange={(e) => setIssueDescription(e.target.value)}
+                rows={4}
+                placeholder="Describe the issue you're facing..."
+              />
+              {errors.issueDescription ? <div className="error">{errors.issueDescription}</div> : null}
+            </div>
+          </div>
+
+          <div className="rrq-srGrid2">
+            <Input
+              label="Contact Name"
+              name="contactName"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="e.g., John Doe"
+              required
+              error={errors.contactName}
+            />
+            <Input
+              label="Contact Phone"
+              name="contactPhone"
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value)}
+              placeholder="e.g., 555-123-4567"
+              required
+              error={errors.contactPhone}
+            />
+          </div>
+
+          <div className="rrq-srFull">
+            <div className="field">
+              <label className="label" htmlFor="breakdownAddress">
+                Breakdown Address <span className="req">*</span>
+              </label>
+
+              <div className="rrq-srAddressRow">
+                <input
+                  id="breakdownAddress"
+                  className={`input ${errors.breakdownAddress ? "input-error" : ""}`}
+                  value={breakdownAddress}
+                  onChange={(e) => setBreakdownAddress(e.target.value)}
+                  placeholder="Enter your location..."
+                />
+                <Button type="button" variant="secondary-outline" onClick={onFindLocation} className="rrq-srFindBtn">
+                  Find Location
+                </Button>
+              </div>
+
+              {errors.breakdownAddress ? <div className="error">{errors.breakdownAddress}</div> : null}
+            </div>
+          </div>
+
+          <div className="rrq-srGrid2">
+            <Input
+              label="Latitude"
+              name="lat"
+              value={lat}
+              onChange={(e) => setLat(e.target.value)}
+              placeholder="Auto-filled"
+            />
+            <Input
+              label="Longitude"
+              name="lon"
+              value={lon}
+              onChange={(e) => setLon(e.target.value)}
+              placeholder="Auto-filled"
+            />
+          </div>
+
+          <div className="rrq-srActions">
+            <Button type="button" variant="ghost" onClick={clearForm}>
+              Clear Form
+            </Button>
+            <Button type="submit">Submit Request</Button>
+          </div>
+        </form>
+      </Card>
     </UserShell>
   );
 }
