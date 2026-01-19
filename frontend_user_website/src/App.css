@@ -119,9 +119,53 @@ a{color:inherit}
   background: #fff;
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
+
+/* Password visibility toggle (eye icon) */
+.input-with-trailing{
+  position: relative;
+}
+.input--with-trailing{
+  padding-right: 44px; /* space for icon button */
+}
+.input-trailing-btn{
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 10px;
+  padding: 0;
+  cursor: pointer;
+  color: var(--muted);
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.input-trailing-btn:hover{
+  background: rgba(37,99,235,0.08);
+  color: var(--primary);
+}
+.input-trailing-btn:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .textarea{resize: vertical; min-height: 90px}
 .input:focus, .textarea:focus{
   border-color: rgba(37,99,235,0.65);
+  box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
+}
+
+/* Focus ring for the password eye toggle button */
+.input-trailing-btn:focus{
+  outline: none;
+}
+.input-trailing-btn:focus-visible{
+  border-color: rgba(37,99,235,0.45);
   box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
 }
 .input-error{
