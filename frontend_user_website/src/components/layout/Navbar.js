@@ -47,8 +47,26 @@ export function Navbar() {
   return (
     <header className="navbar">
       <div className="navbar-inner">
-        <Link to="/" className="brand" aria-label="RoadRescue home" onClick={() => setOpen(false)}>
-          RoadRescue <span className="brand-accent">QuickAssist</span>
+        <Link
+          to="/"
+          className="brand"
+          aria-label="RoadRescue home"
+          onClick={() => setOpen(false)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 10 }}
+        >
+          <img
+            src="/assets/roadrescue-logo.jpeg"
+            alt="RoadRescue logo"
+            style={{
+              height: 28,
+              width: 28,
+              objectFit: "contain",
+              display: "block",
+            }}
+          />
+          <span>
+            RoadRescue <span className="brand-accent">QuickAssist</span>
+          </span>
         </Link>
 
         <nav className="navlinks navlinks-desktop" aria-label="Primary navigation">
